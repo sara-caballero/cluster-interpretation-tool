@@ -62,30 +62,35 @@ if file:
     max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
     outlier_method = st.sidebar.radio("Outlier removal", ["isoforest", "none"], index=0)
     contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01)
-    draw_sankey = st.sidebar.checkbox("Draw Sankey (requires pySankey)", value=False)
 
     # Initialize session state for preprocessed data
     if 'preprocessed_data' not in st.session_state:
         st.session_state.preprocessed_data = None
 
     # ---- Preprocess Data Button ----
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        if st.button("🔧 Preprocess Data"):
-            with st.spinner("Preprocessing data..."):
-                preprocessed_info = preprocess_data(
-                    file_path=tmp_path,
-                    target=target,
-                    scaling=scaling,
-                    outlier_method=outlier_method,
-                    contamination=contamination,
-                )
-                st.session_state.preprocessed_data = preprocessed_info
+    # Only show preprocessing button if outlier removal is enabled
+    if outlier_method != "none":
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            if st.button("🔧 Preprocess Data"):
+                with st.spinner("Preprocessing data..."):
+                    preprocessed_info = preprocess_data(
+                        file_path=tmp_path,
+                        target=target,
+                        scaling=scaling,
+                        outlier_method=outlier_method,
+                        contamination=contamination,
+                    )
+                    st.session_state.preprocessed_data = preprocessed_info
 
-    with col2:
-        if st.session_state.preprocessed_data is not None:
-            st.success("Data is preprocessed and ready for clustering!")
+        with col2:
+            if st.session_state.preprocessed_data is not None:
+                st.success("Data is preprocessed and ready for clustering!")
+    else:
+        # Clear any existing preprocessed data when outlier removal is disabled
+        if 'preprocessed_data' in st.session_state:
+            del st.session_state.preprocessed_data
 
     # ---- Show Preprocessed Data ----
     if st.session_state.preprocessed_data is not None:
