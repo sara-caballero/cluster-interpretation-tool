@@ -74,13 +74,11 @@ contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01
 
 # Documentation section at the bottom of settings
 st.sidebar.markdown("---")
-col1, col2 = st.sidebar.columns(2)
-with col1:
-    if st.button("📖 User Guide"):
-        st.session_state.show_user_guide_modal = True
-with col2:
-    if st.button("🔬 Technical Guide"):
-        st.session_state.show_technical_guide_modal = True
+st.sidebar.markdown("### 📚 Documentation")
+if st.sidebar.button("📖 User Guide"):
+    st.session_state.show_user_guide_modal = True
+if st.sidebar.button("🔬 Technical Guide"):
+    st.session_state.show_technical_guide_modal = True
 
 # Initialize modal states
 if 'show_user_guide_modal' not in st.session_state:
