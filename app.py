@@ -82,13 +82,10 @@ if file:
                     contamination=contamination,
                 )
                 st.session_state.preprocessed_data = preprocessed_info
-            st.success("Data preprocessed successfully!")
 
     with col2:
         if st.session_state.preprocessed_data is not None:
             st.success("Data is preprocessed and ready for clustering!")
-        else:
-            st.info("Click 'Preprocess Data' to prepare your data for clustering")
 
     # ---- Show Preprocessed Data ----
     if st.session_state.preprocessed_data is not None:
@@ -132,7 +129,7 @@ if file:
         
         # Show data distribution
         with st.expander("Data Distribution"):
-            fig, axes = plt.subplots(2, 2, figsize=(8, 6))
+            fig, axes = plt.subplots(2, 2, figsize=(5, 4))
             
             # Feature distributions
             sample_features = preprocessed_info['features_used'][:4]  # Show first 4 features
