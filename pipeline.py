@@ -587,6 +587,30 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 # compute overall % for 1.0 (use non-null only)
                 overall_pct_1 = 100.0 * (target_binary == 1.0).mean()
 
+    # Reconstruct dummies from original CSV (aligned with rows after outlier removal)
+    if file_path is not None:
+        raw = pd.read_csv(file_path)
+        raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
+        
+        # Get original feature names (before encoding)
+        original_features = []
+        for feat in drivers['feature'].unique():
+            if '_' in feat:  # encoded feature
+                base = feat.rsplit('_', 1)[0]
+                if base not in original_features:
+                    original_features.append(base)
+            else:
+                if feat not in original_features:
+                    original_features.append(feat)
+        
+        # Reconstruct dummies for binary features
+        binary_features = {}
+        for feat in original_features:
+            if feat in raw.columns:
+                unique_vals = raw[feat].dropna().unique()
+                if len(unique_vals) == 2:  # binary feature
+                    binary_features[feat] = unique_vals
+
     # Build the sentences
     summaries = []
     for cid in sorted(drivers["cluster"].unique()):
@@ -594,16 +618,36 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                  .sort_values("z_median", key=lambda s: s.abs(), ascending=False)
                  .head(top_n))
 
-        phrases = [
-            humanize_feature(
-                r.feature,
-                r.direction,
-                r.cluster_median,
-                r.overall_median,
-                set(np.unique(X[r.feature].values)).issubset({0.0, 1.0})
-            )
-            for _, r in chunk.iterrows()
-        ]
+        phrases = []
+        for _, r in chunk.iterrows():
+            feat = r.feature
+            direction = r.direction
+            
+            # Check if it's a binary feature
+            is_binary = False
+            if '_' in feat:  # encoded feature
+                base, level = feat.rsplit('_', 1)
+                if base in binary_features:
+                    is_binary = True
+                    # Calculate percentage from original data
+                    mask = (labels == cid)
+                    cluster_data = raw.loc[mask, base]
+                    overall_data = raw[base]
+                    
+                    # Calculate percentages
+                    cluster_pct = 100.0 * (cluster_data == level).mean()
+                    overall_pct = 100.0 * (overall_data == level).mean()
+                    
+                    if direction == "higher":
+                        phrases.append(f"{level} {base} is more common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
+                    else:
+                        phrases.append(f"{level} {base} is less common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
+                else:
+                    # Use original logic for non-binary encoded features
+                    phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
+            else:
+                # Use original logic for non-encoded features
+                phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
 
         line = f"Cluster {cid} (n={sizes.get(cid, 0)}): " + ", ".join(phrases) + "."
 
