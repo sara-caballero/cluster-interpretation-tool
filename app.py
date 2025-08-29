@@ -11,6 +11,17 @@ from pipeline import run_pipeline, auto_describe_clusters, preprocess_data
 st.set_page_config(page_title="Cluster Interpretation Tool", layout="wide")
 st.title("🔍 Cluster Interpretation Tool")
 
+# Add documentation links
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.markdown("Discover patterns and insights in your data through automated clustering analysis.")
+with col2:
+    with st.expander("📚 Documentation"):
+        st.markdown("**User Guide**: [How to use this tool](docs/USER_GUIDE.md)")
+        st.markdown("**Technical Guide**: [Algorithms and concepts](docs/TECHNICAL_GUIDE.md)")
+        st.markdown("---")
+        st.markdown("*Both guides are in development*")
+
 st.markdown(
     """
 Upload a CSV, preprocess the data, and get:
