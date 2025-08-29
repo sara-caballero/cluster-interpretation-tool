@@ -346,7 +346,7 @@ def run_pipeline(
     angles.append(180.0)
 
     # plot both curves on two y-axes so we can see them
-    fig, ax1 = plt.subplots(figsize=(5, 5))
+    fig, ax1 = plt.subplots(figsize=(2, 2))
     ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
     ax1.set_xlabel("number of clusters (k)")
     ax1.set_ylabel("normalized inertia [0..1]")

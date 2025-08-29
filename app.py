@@ -132,7 +132,7 @@ if file:
             fig, axes = plt.subplots(2, 2, figsize=(8, 6))
             
             # Feature distributions
-            sample_features = preprocessed_info['features_used'][:4]  # Show first 4 features
+            sample_features = preprocessed_info['features_used'][:10]  # Show first 4 features
             for i, feature in enumerate(sample_features):
                 row, col = i // 2, i % 2
                 axes[row, col].hist(preprocessed_info['scaled_data'][feature], bins=20, alpha=0.7)
