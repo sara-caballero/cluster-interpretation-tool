@@ -140,7 +140,7 @@ def sankey_top_flows(df, labels, features, bins=3, title="Top drivers → Cluste
         left   += counts["left"].tolist()
         right  += counts["right"].tolist()
         weights += counts["n"].tolist()
-    plt.figure(figsize=(9, 6))
+    plt.figure(figsize=(7, 5))
     sankey(left=left, right=right, leftWeight=weights, rightWeight=weights, aspect=20, fontsize=10)
     plt.title(title)
     plt.show()
@@ -311,7 +311,7 @@ def run_pipeline(
 
     embed = pd.DataFrame({"X": emb_xy[:, 0], "Y": emb_xy[:, 1]}, index=X_scaled.index)
 
-    plt.figure(figsize=(7, 7))
+    plt.figure(figsize=(5, 5))
     plt.scatter(embed["X"], embed["Y"], s=10)
     plt.title(f"{embedder} embedding")
     plt.xticks([]); plt.yticks([])
@@ -346,7 +346,7 @@ def run_pipeline(
     angles.append(180.0)
 
     # plot both curves on two y-axes so we can see them
-    fig, ax1 = plt.subplots(figsize=(7, 7))
+    fig, ax1 = plt.subplots(figsize=(5, 5))
     ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
     ax1.set_xlabel("number of clusters (k)")
     ax1.set_ylabel("normalized inertia [0..1]")
@@ -379,7 +379,7 @@ def run_pipeline(
     print(f"KMeans silhouette at k={best_k}: {sil_final:.3f}")
 
     # STEP 11: Plot clusters on 2D embedding
-    plt.figure(figsize=(7, 7))
+    plt.figure(figsize=(5, 5))
     for c in sorted(labels_kmeans.unique()):
         pts = embed.loc[labels_kmeans == c]
         plt.scatter(pts["X"], pts["Y"], s=10, label=f"Cluster {c}")
@@ -397,7 +397,7 @@ def run_pipeline(
     tmp = X_scaled.copy()
     tmp["Cluster"] = labels_kmeans.values
     for col in X_scaled.columns[:min(12, X_scaled.shape[1])]:
-        plt.figure(figsize=(6, 4))
+        plt.figure(figsize=(4, 3))
         sns.boxplot(x="Cluster", y=col, data=tmp)
         plt.title(f"{col} by cluster (KMeans)")
         plt.show()

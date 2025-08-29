@@ -86,7 +86,7 @@ if file:
 
     with col2:
         if st.session_state.preprocessed_data is not None:
-            st.success("✅ Data is preprocessed and ready for clustering!")
+            st.success("Data is preprocessed and ready for clustering!")
         else:
             st.info("Click 'Preprocess Data' to prepare your data for clustering")
 
@@ -94,7 +94,7 @@ if file:
     if st.session_state.preprocessed_data is not None:
         preprocessed_info = st.session_state.preprocessed_data
         
-        st.subheader("📊 Preprocessed Data Summary")
+        st.subheader("Preprocessed Data Summary")
         
         # Create a nice summary display
         col1, col2, col3, col4 = st.columns(4)
@@ -112,7 +112,7 @@ if file:
             st.metric("Categorical Features Encoded", preprocessed_info['categorical_encoded'])
         
         # Show preprocessing details
-        with st.expander("🔍 Preprocessing Details"):
+        with st.expander("Preprocessing Details"):
             st.write(f"**Scaling Method:** {preprocessed_info['scaling_method']}")
             st.write(f"**Outlier Method:** {preprocessed_info['outlier_method']}")
             if preprocessed_info['outlier_method'] == 'isoforest':
@@ -123,16 +123,16 @@ if file:
                 'Feature': preprocessed_info['features_used'],
                 'Type': ['Encoded' if '_' in f else 'Original' for f in preprocessed_info['features_used']]
             })
-            st.dataframe(features_df, use_container_width=True)
+            st.dataframe(features_df, width='stretch')
         
         # Show sample of preprocessed data
-        with st.expander("📋 Sample of Preprocessed Data (first 10 rows)"):
+        with st.expander("Sample of Preprocessed Data (first 10 rows)"):
             sample_data = preprocessed_info['scaled_data'].head(10)
-            st.dataframe(sample_data, use_container_width=True)
+            st.dataframe(sample_data, width='stretch')
         
         # Show data distribution
-        with st.expander("📈 Data Distribution"):
-            fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+        with st.expander("Data Distribution"):
+            fig, axes = plt.subplots(2, 2, figsize=(8, 6))
             
             # Feature distributions
             sample_features = preprocessed_info['features_used'][:4]  # Show first 4 features
@@ -169,7 +169,7 @@ if file:
             st.success("Done!")
 
             # ---- Summaries ----
-            st.subheader("🧩 Cluster summaries")
+            st.subheader("Cluster summaries")
             summaries = auto_describe_clusters(
                 results,
                 file_path=tmp_path,
@@ -189,7 +189,7 @@ if file:
             )
 
             # ---- Drivers table ----
-            with st.expander("📄 Top driver features (table)"):
+            with st.expander("Top driver features (table)"):
                 st.dataframe(results["kmeans_drivers"])
     else:
         st.info("Please preprocess your data first before running clustering.")
