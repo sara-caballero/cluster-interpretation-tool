@@ -65,6 +65,18 @@ if file:
 
 # Settings that are always available
 target = st.sidebar.selectbox("Target column (optional)", [None] + all_cols, index=0)
+
+# Column exclusion settings
+st.sidebar.markdown("### Column Selection")
+if all_cols:
+    excluded_cols = st.sidebar.multiselect(
+        "Exclude columns from clustering", 
+        all_cols,
+        help="Select columns you don't want to use as features (e.g., IDs, timestamps)"
+    )
+else:
+    excluded_cols = []
+
 scaling = st.sidebar.radio("Scaling", ["minmax", "standard", "none"], index=0)
 embedder = st.sidebar.radio("Embedding (for plots)", ["PCA", "UMAP"], index=0)
 cluster_on_features = st.sidebar.checkbox("Cluster on full features (recommended)", value=True)
@@ -132,9 +144,10 @@ if file:
         with col1:
             if st.button("🔧 Preprocess Data"):
                 with st.spinner("Preprocessing data..."):
-                    preprocessed_info = preprocess_data(
+                                        preprocessed_info = preprocess_data(
                         file_path=tmp_path,
                         target=target,
+                        excluded_cols=excluded_cols,
                         scaling=scaling,
                         outlier_method=outlier_method,
                         contamination=contamination,
@@ -238,6 +251,7 @@ if file:
                     results = run_pipeline(
                         file_path=tmp_path,
                         target=target,
+                        excluded_cols=excluded_cols,
                         scaling=scaling,
                         embedder=embedder,
                         cluster_on_features=cluster_on_features,

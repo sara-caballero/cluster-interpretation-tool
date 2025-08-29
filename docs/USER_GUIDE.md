@@ -46,122 +46,6 @@ The Cluster Interpretation Tool automatically:
 2. Select your CSV file
 3. The tool will automatically load and preview your data
 
-## Real-World Use Cases
-
-### Customer Segmentation
-**Scenario**: You have customer data with purchase history, demographics, and behavior metrics.
-
-**Example Data**:
-```
-customer_id,age,income,avg_order_value,purchase_frequency,product_category
-C001,25,45000,85.50,3.2,electronics
-C002,45,75000,120.30,1.8,home_garden
-C003,32,60000,95.20,2.5,clothing
-```
-
-**What You'll Discover**:
-- High-value customers (high income, frequent purchases)
-- Budget-conscious shoppers (lower income, selective purchases)
-- New customers vs loyal customers
-- Product preference patterns
-
-**Business Applications**:
-- Targeted marketing campaigns
-- Personalized product recommendations
-- Customer retention strategies
-- Pricing optimization
-
-### Product Analysis
-**Scenario**: You want to understand product performance across different dimensions.
-
-**Example Data**:
-```
-product_id,price,rating,review_count,sales_volume,profit_margin
-P001,29.99,4.2,156,1200,0.35
-P002,89.99,3.8,89,450,0.42
-P003,15.50,4.5,234,2100,0.28
-```
-
-**What You'll Discover**:
-- Premium products (high price, high quality)
-- Volume sellers (low price, high sales)
-- Underperforming products
-- Market positioning opportunities
-
-**Business Applications**:
-- Inventory management
-- Pricing strategy
-- Product development priorities
-- Marketing focus areas
-
-### Employee Performance Analysis
-**Scenario**: HR wants to understand employee performance patterns and identify development needs.
-
-**Example Data**:
-```
-employee_id,tenure_months,projects_completed,client_satisfaction,training_hours,performance_score
-E001,24,15,4.3,40,85
-E002,6,8,3.9,60,72
-E003,36,22,4.6,25,92
-```
-
-**What You'll Discover**:
-- High performers (experienced, high satisfaction)
-- Developing employees (new, high training hours)
-- Experienced specialists
-- Areas needing support
-
-**Business Applications**:
-- Career development planning
-- Training program design
-- Performance improvement initiatives
-- Succession planning
-
-### Financial Data Analysis
-**Scenario**: Analyzing investment portfolios or financial transactions for patterns.
-
-**Example Data**:
-```
-transaction_id,amount,merchant_category,day_of_week,time_of_day,location
-T001,45.67,restaurant,Friday,19:30,urban
-T002,120.50,electronics,Saturday,14:15,suburban
-T003,23.40,grocery,Wednesday,18:45,urban
-```
-
-**What You'll Discover**:
-- Spending patterns by category
-- Time-based behavior clusters
-- Geographic spending differences
-- Lifestyle-based segments
-
-**Business Applications**:
-- Fraud detection
-- Credit risk assessment
-- Personalized financial advice
-- Merchant partnership opportunities
-
-### Healthcare Patient Segmentation
-**Scenario**: Medical practice analyzing patient characteristics and health outcomes.
-
-**Example Data**:
-```
-patient_id,age,blood_pressure,cholesterol,exercise_hours,medication_count
-P001,45,140/90,220,2.5,2
-P002,62,160/95,280,0.5,4
-P003,38,120/80,180,4.0,0
-```
-
-**What You'll Discover**:
-- High-risk patients (multiple risk factors)
-- Healthy lifestyle groups
-- Medication-dependent patients
-- Prevention opportunities
-
-**Business Applications**:
-- Preventive care programs
-- Resource allocation
-- Treatment protocol optimization
-- Patient education campaigns
 
 ## Understanding the Settings
 
@@ -322,6 +206,123 @@ If you encounter issues not covered in this guide:
 3. Start with a smaller subset of your data
 4. Ensure your data meets the minimum requirements
 
----
 
-**Note**: This tool is designed to be user-friendly and requires no technical background. The automated analysis handles the complex statistical work, so you can focus on interpreting the results for your specific use case.
+
+## Use Cases
+
+### Customer Segmentation
+**Scenario**: You have customer data with purchase history, demographics, and behavior metrics.
+
+**Example Data**:
+```
+customer_id,age,income,avg_order_value,purchase_frequency,product_category
+C001,25,45000,85.50,3.2,electronics
+C002,45,75000,120.30,1.8,home_garden
+C003,32,60000,95.20,2.5,clothing
+```
+
+**What You'll Discover**:
+- High-value customers (high income, frequent purchases)
+- Budget-conscious shoppers (lower income, selective purchases)
+- New customers vs loyal customers
+- Product preference patterns
+
+**Business Applications**:
+- Targeted marketing campaigns
+- Personalized product recommendations
+- Customer retention strategies
+- Pricing optimization
+
+### Product Analysis
+**Scenario**: You want to understand product performance across different dimensions.
+
+**Example Data**:
+```
+product_id,price,rating,review_count,sales_volume,profit_margin
+P001,29.99,4.2,156,1200,0.35
+P002,89.99,3.8,89,450,0.42
+P003,15.50,4.5,234,2100,0.28
+```
+
+**What You'll Discover**:
+- Premium products (high price, high quality)
+- Volume sellers (low price, high sales)
+- Underperforming products
+- Market positioning opportunities
+
+**Business Applications**:
+- Inventory management
+- Pricing strategy
+- Product development priorities
+- Marketing focus areas
+
+### Employee Performance Analysis
+**Scenario**: HR wants to understand employee performance patterns and identify development needs.
+
+**Example Data**:
+```
+employee_id,tenure_months,projects_completed,client_satisfaction,training_hours,performance_score
+E001,24,15,4.3,40,85
+E002,6,8,3.9,60,72
+E003,36,22,4.6,25,92
+```
+
+**What You'll Discover**:
+- High performers (experienced, high satisfaction)
+- Developing employees (new, high training hours)
+- Experienced specialists
+- Areas needing support
+
+**Business Applications**:
+- Career development planning
+- Training program design
+- Performance improvement initiatives
+- Succession planning
+
+### Financial Data Analysis
+**Scenario**: Analyzing investment portfolios or financial transactions for patterns.
+
+**Example Data**:
+```
+transaction_id,amount,merchant_category,day_of_week,time_of_day,location
+T001,45.67,restaurant,Friday,19:30,urban
+T002,120.50,electronics,Saturday,14:15,suburban
+T003,23.40,grocery,Wednesday,18:45,urban
+```
+
+**What You'll Discover**:
+- Spending patterns by category
+- Time-based behavior clusters
+- Geographic spending differences
+- Lifestyle-based segments
+
+**Business Applications**:
+- Fraud detection
+- Credit risk assessment
+- Personalized financial advice
+- Merchant partnership opportunities
+
+### Healthcare Patient Segmentation
+**Scenario**: Medical practice analyzing patient characteristics and health outcomes.
+
+**Example Data**:
+```
+patient_id,age,blood_pressure,cholesterol,exercise_hours,medication_count
+P001,45,140/90,220,2.5,2
+P002,62,160/95,280,0.5,4
+P003,38,120/80,180,4.0,0
+```
+
+**What You'll Discover**:
+- High-risk patients (multiple risk factors)
+- Healthy lifestyle groups
+- Medication-dependent patients
+- Prevention opportunities
+
+**Business Applications**:
+- Preventive care programs
+- Resource allocation
+- Treatment protocol optimization
+- Patient education campaigns
+
+---

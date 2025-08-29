@@ -153,6 +153,7 @@ def sankey_top_flows(df, labels, features, bins=3, title="Top drivers → Cluste
 def preprocess_data(
     file_path,
     target=None,
+    excluded_cols=None,
     scaling="minmax",
     outlier_method="isoforest",
     contamination=0.03,
@@ -170,9 +171,19 @@ def preprocess_data(
     feat_cols = list(raw.columns)
     if target is not None and target in feat_cols:
         feat_cols.remove(target)
+    if excluded_cols is not None:
+        for col in excluded_cols:
+            if col in feat_cols:
+                feat_cols.remove(col)
     X = raw[feat_cols].copy()
     
     # STEP 3: Encode categorical features
+    # Identify categorical columns before encoding
+    categorical_cols = []
+    for col in X.columns:
+        if X[col].dtype == 'object' or X[col].dtype == 'category':
+            categorical_cols.append(col)
+    
     X_encoded = pd.get_dummies(X, drop_first=True, dtype=float)
     for c in X_encoded.columns:
         if X_encoded[c].dtype == bool:
@@ -219,7 +230,7 @@ def preprocess_data(
         "scaling_method": scaling,
         "outlier_method": outlier_method,
         "outliers_removed": outliers_removed,
-        "categorical_encoded": len(X_encoded.columns) - len(X.columns),
+        "categorical_encoded": len(categorical_cols),
         "raw_data": raw,
         "scaled_data": X_scaled
     }
@@ -234,6 +245,7 @@ def preprocess_data(
 def run_pipeline(
     file_path,
     target=None,               # set to your target col or None (not used for clustering, just for comparison)
+    excluded_cols=None,        # columns to exclude from clustering
     scaling="minmax",          # "minmax", "standard", or "none"
     embedder="PCA",            # method for 2D plot: "PCA", "UMAP", or "tSNE". IMP! This does not affect clustering if cluster_on_features=True
     cluster_on_features=True,  # True = cluster on scaled features, False = cluster on 2D embedding
@@ -258,6 +270,10 @@ def run_pipeline(
         feat_cols = list(raw.columns)
         if target is not None and target in feat_cols:
             feat_cols.remove(target)
+        if excluded_cols is not None:
+            for col in excluded_cols:
+                if col in feat_cols:
+                    feat_cols.remove(col)
         X = raw[feat_cols].copy()
 
         # STEP 3: Encode categorical features
