@@ -93,7 +93,7 @@ if file:
             del st.session_state.preprocessed_data
 
     # ---- Show Preprocessed Data ----
-    if st.session_state.preprocessed_data is not None:
+    if 'preprocessed_data' in st.session_state and st.session_state.preprocessed_data is not None:
         preprocessed_info = st.session_state.preprocessed_data
         
         st.subheader("Preprocessed Data Summary")
@@ -162,11 +162,22 @@ if file:
             plt.close(fig)
 
     # ---- Run Clustering Button ----
-    if st.session_state.preprocessed_data is not None:
+    # Show clustering button if we have preprocessed data OR if outlier removal is disabled
+    show_clustering_button = (
+        ('preprocessed_data' in st.session_state and st.session_state.preprocessed_data is not None) or
+        outlier_method == "none"
+    )
+    
+    if show_clustering_button:
         if st.button("🚀 Run clustering"):
             with st.spinner("Running pipeline…"):
                 # capture all matplotlib figures that your pipeline .show() calls produce
                 with streamlit_matplotlib():
+                    # Pass preprocessed_data only if it exists
+                    preprocessed_data = None
+                    if 'preprocessed_data' in st.session_state:
+                        preprocessed_data = st.session_state.preprocessed_data
+                    
                     results = run_pipeline(
                         file_path=tmp_path,
                         target=target,
@@ -176,8 +187,7 @@ if file:
                         max_k=max_k,
                         outlier_method=outlier_method,
                         contamination=contamination,
-                        draw_sankey=draw_sankey,
-                        preprocessed_data=st.session_state.preprocessed_data,
+                        preprocessed_data=preprocessed_data,
                     )
 
             st.success("Done!")
