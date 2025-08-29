@@ -250,6 +250,7 @@ def run_pipeline(
     embedder="PCA",            # method for 2D plot: "PCA", "UMAP", or "tSNE". IMP! This does not affect clustering if cluster_on_features=True
     cluster_on_features=True,  # True = cluster on scaled features, False = cluster on 2D embedding
     max_k=10,                  # maximum number of clusters to try
+    manual_k=None,             # manual k value override (if provided, skips auto-selection)
     outlier_method="isoforest",# method to drop outliers ("isoforest" or "none")
     contamination=0.03,        # ~3% outliers to drop. higher value -> more aggresive.
     draw_sankey=False,         # optional
@@ -331,67 +332,123 @@ def run_pipeline(
     # (original features or 2D embedding)
     data_for_kmeans = X_scaled if cluster_on_features else embed
 
-    # STEP 8: Try different k values
-    # Compute inertia + silhouette
-    print("Evaluating k for KMeans...")
-    k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
-    if len(k_vals) == 0:
-        raise ValueError("Not enough rows to evaluate k (maybe max_k too big?).")
+    # STEP 8: Determine k value (auto or manual)
+    if manual_k is not None:
+        # Manual k override
+        best_k = manual_k
+        print(f"Using manual k value: {best_k}")
+        
+        # Still create model selection plot for reference (if max_k is available)
+        if max_k is not None:
+            k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
+            if len(k_vals) > 0:
+                inertias, sils = [], []
+                for k in k_vals:
+                    km = KMeans(n_clusters=k, init="k-means++", n_init=20, random_state=42)
+                    lab = km.fit_predict(data_for_kmeans)
+                    inertias.append(km.inertia_)
+                    sils.append(silhouette_score(data_for_kmeans, lab))
+                inertia_norm = np.asarray(inertias, float) / max(inertias)
+                
+                # Create model selection plot
+                fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+                
+                # Plot 1: Embedding
+                axes[0].scatter(embed["X"], embed["Y"], s=10)
+                axes[0].set_title(f"{embedder} embedding")
+                axes[0].set_xticks([])
+                axes[0].set_yticks([])
+                
+                # Plot 2: K-means model selection (for reference)
+                ax1 = axes[1]
+                ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
+                ax1.set_xlabel("number of clusters (k)")
+                ax1.set_ylabel("normalized inertia [0..1]")
+                ax2 = ax1.twinx()
+                ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
+                ax2.set_ylabel("silhouette [-1..1]")
+                
+                # Highlight manual k value
+                if best_k in k_vals:
+                    k_idx = k_vals.index(best_k)
+                    ax1.axvline(x=best_k, color='red', linestyle='--', alpha=0.7, label=f'Manual k={best_k}')
+                    ax1.text(best_k, inertia_norm[k_idx], f'Manual\nk={best_k}', 
+                             ha="center", va="bottom", color='red', fontweight='bold')
+                
+                ax1.legend(loc="upper right")
+                ax1.set_title("KMeans model selection (Manual k highlighted)")
+                
+                plt.tight_layout()
+                plt.show()
+        else:
+            # Just show embedding plot if no max_k available
+            plt.figure(figsize=(6, 5))
+            plt.scatter(embed["X"], embed["Y"], s=10)
+            plt.title(f"{embedder} embedding")
+            plt.xticks([])
+            plt.yticks([])
+            plt.show()
+    else:
+        # Auto k selection (original logic)
+        print("Evaluating k for KMeans...")
+        k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
+        if len(k_vals) == 0:
+            raise ValueError("Not enough rows to evaluate k (maybe max_k too big?).")
 
-    inertias, sils = [], []
-    for k in k_vals:
-        km  = KMeans(n_clusters=k, init="k-means++", n_init=20, random_state=42)
-        lab = km.fit_predict(data_for_kmeans)
-        inertias.append(km.inertia_)
-        sils.append(silhouette_score(data_for_kmeans, lab))
-    inertia_norm = np.asarray(inertias, float) / max(inertias)
+        inertias, sils = [], []
+        for k in k_vals:
+            km  = KMeans(n_clusters=k, init="k-means++", n_init=20, random_state=42)
+            lab = km.fit_predict(data_for_kmeans)
+            inertias.append(km.inertia_)
+            sils.append(silhouette_score(data_for_kmeans, lab))
+        inertia_norm = np.asarray(inertias, float) / max(inertias)
 
-    # elbow "angles" (like the class template)
-    angles = [180.0]
-    for i in range(1, len(inertia_norm) - 1):
-        left  = inertia_norm[i] - inertia_norm[i - 1]
-        right = inertia_norm[i + 1] - inertia_norm[i]
-        ang = 180.0 - math.degrees(math.atan((right - left) / (1 + (right * left))))
-        angles.append(ang)
-        angles.append(180.0)
+        # elbow "angles" (like the class template)
+        angles = [180.0]
+        for i in range(1, len(inertia_norm) - 1):
+            left  = inertia_norm[i] - inertia_norm[i - 1]
+            right = inertia_norm[i + 1] - inertia_norm[i]
+            ang = 180.0 - math.degrees(math.atan((right - left) / (1 + (right * left))))
+            angles.append(ang)
+            angles.append(180.0)
 
-    # Create 2-column grid for main plots after K-means evaluation
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    
-    # Plot 1: Embedding
-    axes[0].scatter(embed["X"], embed["Y"], s=10)
-    axes[0].set_title(f"{embedder} embedding")
-    axes[0].set_xticks([])
-    axes[0].set_yticks([])
-    
-    # Plot 2: K-means model selection
-    ax1 = axes[1]
-    ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
-    ax1.set_xlabel("number of clusters (k)")
-    ax1.set_ylabel("normalized inertia [0..1]")
-    ax2 = ax1.twinx()
-    ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
-    ax2.set_ylabel("silhouette [-1..1]")
+        # Create 2-column grid for main plots after K-means evaluation
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+        
+        # Plot 1: Embedding
+        axes[0].scatter(embed["X"], embed["Y"], s=10)
+        axes[0].set_title(f"{embedder} embedding")
+        axes[0].set_xticks([])
+        axes[0].set_yticks([])
+        
+        # Plot 2: K-means model selection
+        ax1 = axes[1]
+        ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
+        ax1.set_xlabel("number of clusters (k)")
+        ax1.set_ylabel("normalized inertia [0..1]")
+        ax2 = ax1.twinx()
+        ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
+        ax2.set_ylabel("silhouette [-1..1]")
 
-    # add tiny labels so it's easier to read
-    for i, s in enumerate(sils):
-        is_peak = (i == 0 or s >= sils[i-1]) and (i == len(sils)-1 or s >= sils[i+1])
-        if is_peak:
-            ax2.text(k_vals[i], s, f'k={k_vals[i]}\n{s:.2f}', ha="center", va="bottom")
-    for a in range(1, len(angles) - 1):
-        if angles[a-1] >= angles[a] <= angles[a+1] and a < len(k_vals) and a < len(inertia_norm):
-            ax1.text(k_vals[a], float(inertia_norm[a]), f'k={k_vals[a]}\n{angles[a]:.1f}°',
-                     ha="center", va="bottom")
+        # add tiny labels so it's easier to read
+        for i, s in enumerate(sils):
+            is_peak = (i == 0 or s >= sils[i-1]) and (i == len(sils)-1 or s >= sils[i+1])
+            if is_peak:
+                ax2.text(k_vals[i], s, f'k={k_vals[i]}\n{s:.2f}', ha="center", va="bottom")
+        for a in range(1, len(angles) - 1):
+            if angles[a-1] >= angles[a] <= angles[a+1] and a < len(k_vals) and a < len(inertia_norm):
+                ax1.text(k_vals[a], float(inertia_norm[a]), f'k={k_vals[a]}\n{angles[a]:.1f}°',
+                         ha="center", va="bottom")
 
-    ax1.legend(loc="upper right")
-    ax1.set_title("KMeans model selection")
-    
-    plt.tight_layout()
-    plt.show()
+        ax1.legend(loc="upper right")
+        ax1.set_title("KMeans model selection")
+        
+        plt.tight_layout()
+        plt.show()
 
-    # STEP 9: Auto-pick the best k
-    best_k, why = pick_k_auto(k_vals, inertia_norm, sils, angles)
-    print("Auto-picked k:", best_k, "->", why)
+        # Auto-pick the best k
+        best_k, why = pick_k_auto(k_vals, inertia_norm, sils, angles)
+        print("Auto-picked k:", best_k, "->", why)
 
     # STEP 10: Final KMeans fit
     km_final = KMeans(n_clusters=best_k, init="k-means++", n_init=20, random_state=42)

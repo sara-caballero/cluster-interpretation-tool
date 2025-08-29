@@ -69,18 +69,23 @@ target = st.sidebar.selectbox("Target column (optional)", [None] + all_cols, ind
 # Column exclusion settings
 excluded_cols = st.sidebar.multiselect(
     "Exclude columns from clustering (optional)", 
-    [None] + all_cols if all_cols else [None],
-    default=None,
+    all_cols if all_cols else [],
     help="Select columns you don't want to use as features (e.g., IDs, timestamps)"
 )
-# Remove None from the list if it was selected
-if None in excluded_cols:
-    excluded_cols.remove(None)
 
 scaling = st.sidebar.radio("Scaling", ["minmax", "standard", "none"], index=0)
 embedder = st.sidebar.radio("Embedding (for plots)", ["PCA", "UMAP"], index=0)
 cluster_on_features = st.sidebar.checkbox("Cluster on full features (recommended)", value=True)
-max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
+# K-means configuration
+k_selection = st.sidebar.radio("K selection method", ["Auto (silhouette + elbow)", "Manual override"], index=0)
+
+if k_selection == "Auto (silhouette + elbow)":
+    max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
+    manual_k = None
+else:
+    manual_k = st.sidebar.slider("Manual k value", 2, 15, 3)
+    max_k = None
+
 outlier_method = st.sidebar.radio("Outlier removal", ["isoforest", "none"], index=0)
 contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01)
 
@@ -256,6 +261,7 @@ if file:
                         embedder=embedder,
                         cluster_on_features=cluster_on_features,
                         max_k=max_k,
+                        manual_k=manual_k,
                         outlier_method=outlier_method,
                         contamination=contamination,
                         preprocessed_data=preprocessed_data,
