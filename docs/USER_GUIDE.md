@@ -1,10 +1,10 @@
-# 🔍 Cluster Interpretation Tool - User Guide
+# Cluster Interpretation Tool - User Guide
 
-**⚠️ Tool Development in Progress**
+**Tool Development in Progress**
 
 This guide will help you use the Cluster Interpretation Tool to discover patterns and insights in your data through automated clustering analysis.
 
-## 📋 Table of Contents
+## Table of Contents
 1. [Getting Started](#getting-started)
 2. [Uploading Your Data](#uploading-your-data)
 3. [Understanding the Settings](#understanding-the-settings)
@@ -14,7 +14,7 @@ This guide will help you use the Cluster Interpretation Tool to discover pattern
 7. [Downloading Results](#downloading-results)
 8. [Troubleshooting](#troubleshooting)
 
-## 🚀 Getting Started
+## Getting Started
 
 ### What You Need
 - A CSV file with your data
@@ -29,7 +29,7 @@ The Cluster Interpretation Tool automatically:
 - Explains what makes each cluster unique
 - Provides visualizations to understand your data
 
-## 📁 Uploading Your Data
+## Uploading Your Data
 
 ### Supported File Format
 - **CSV files only** (.csv extension)
@@ -46,7 +46,124 @@ The Cluster Interpretation Tool automatically:
 2. Select your CSV file
 3. The tool will automatically load and preview your data
 
-## ⚙️ Understanding the Settings
+## Real-World Use Cases
+
+### Customer Segmentation
+**Scenario**: You have customer data with purchase history, demographics, and behavior metrics.
+
+**Example Data**:
+```
+customer_id,age,income,avg_order_value,purchase_frequency,product_category
+C001,25,45000,85.50,3.2,electronics
+C002,45,75000,120.30,1.8,home_garden
+C003,32,60000,95.20,2.5,clothing
+```
+
+**What You'll Discover**:
+- High-value customers (high income, frequent purchases)
+- Budget-conscious shoppers (lower income, selective purchases)
+- New customers vs loyal customers
+- Product preference patterns
+
+**Business Applications**:
+- Targeted marketing campaigns
+- Personalized product recommendations
+- Customer retention strategies
+- Pricing optimization
+
+### Product Analysis
+**Scenario**: You want to understand product performance across different dimensions.
+
+**Example Data**:
+```
+product_id,price,rating,review_count,sales_volume,profit_margin
+P001,29.99,4.2,156,1200,0.35
+P002,89.99,3.8,89,450,0.42
+P003,15.50,4.5,234,2100,0.28
+```
+
+**What You'll Discover**:
+- Premium products (high price, high quality)
+- Volume sellers (low price, high sales)
+- Underperforming products
+- Market positioning opportunities
+
+**Business Applications**:
+- Inventory management
+- Pricing strategy
+- Product development priorities
+- Marketing focus areas
+
+### Employee Performance Analysis
+**Scenario**: HR wants to understand employee performance patterns and identify development needs.
+
+**Example Data**:
+```
+employee_id,tenure_months,projects_completed,client_satisfaction,training_hours,performance_score
+E001,24,15,4.3,40,85
+E002,6,8,3.9,60,72
+E003,36,22,4.6,25,92
+```
+
+**What You'll Discover**:
+- High performers (experienced, high satisfaction)
+- Developing employees (new, high training hours)
+- Experienced specialists
+- Areas needing support
+
+**Business Applications**:
+- Career development planning
+- Training program design
+- Performance improvement initiatives
+- Succession planning
+
+### Financial Data Analysis
+**Scenario**: Analyzing investment portfolios or financial transactions for patterns.
+
+**Example Data**:
+```
+transaction_id,amount,merchant_category,day_of_week,time_of_day,location
+T001,45.67,restaurant,Friday,19:30,urban
+T002,120.50,electronics,Saturday,14:15,suburban
+T003,23.40,grocery,Wednesday,18:45,urban
+```
+
+**What You'll Discover**:
+- Spending patterns by category
+- Time-based behavior clusters
+- Geographic spending differences
+- Lifestyle-based segments
+
+**Business Applications**:
+- Fraud detection
+- Credit risk assessment
+- Personalized financial advice
+- Merchant partnership opportunities
+
+### Healthcare Patient Segmentation
+**Scenario**: Medical practice analyzing patient characteristics and health outcomes.
+
+**Example Data**:
+```
+patient_id,age,blood_pressure,cholesterol,exercise_hours,medication_count
+P001,45,140/90,220,2.5,2
+P002,62,160/95,280,0.5,4
+P003,38,120/80,180,4.0,0
+```
+
+**What You'll Discover**:
+- High-risk patients (multiple risk factors)
+- Healthy lifestyle groups
+- Medication-dependent patients
+- Prevention opportunities
+
+**Business Applications**:
+- Preventive care programs
+- Resource allocation
+- Treatment protocol optimization
+- Patient education campaigns
+
+## Understanding the Settings
 
 ### Target Column (Optional)
 - **What it is**: A column you want to exclude from clustering analysis
@@ -76,7 +193,7 @@ The Cluster Interpretation Tool automatically:
 - **Max clusters**: Maximum number of groups to try (default: 8)
 - **Recommendation**: Start with 2-8, adjust based on your domain knowledge
 
-## 🔧 Preprocessing Your Data
+## Preprocessing Your Data
 
 ### When Preprocessing is Available
 The "Preprocess Data" button appears only when outlier detection is enabled (not "none").
@@ -101,7 +218,7 @@ After preprocessing, you'll see:
 - Helps you understand the distribution of your data
 - Useful for identifying patterns or issues
 
-## 🚀 Running Clustering Analysis
+## Running Clustering Analysis
 
 ### When You Can Run Clustering
 - **With preprocessing**: After clicking "Preprocess Data" (when outlier detection enabled)
@@ -137,7 +254,7 @@ After preprocessing, you'll see:
 - Box plots show the distribution of values
 - Helps identify what makes each cluster unique
 
-## 📊 Interpreting Results
+## Interpreting Results
 
 ### Cluster Summaries
 The tool automatically generates descriptions like:
@@ -154,7 +271,7 @@ The tool automatically generates descriptions like:
 - Higher scores mean the feature is more important for that cluster
 - Helps you understand what defines each group
 
-## ⬇️ Downloading Results
+## Downloading Results
 
 ### What You Can Download
 - **Cluster Assignments**: A CSV file with your original data plus a "Cluster" column
@@ -165,7 +282,7 @@ The tool automatically generates descriptions like:
 2. The "Cluster" column shows which group each row belongs to
 3. Use this for further analysis, reporting, or business decisions
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -197,7 +314,7 @@ The tool automatically generates descriptions like:
 - **Limit clustering range** (e.g., 2-6 clusters instead of 2-15)
 - **Disable outlier detection** if you want to keep all data
 
-## 📞 Getting Help
+## Getting Help
 
 If you encounter issues not covered in this guide:
 1. Check the data format and quality
