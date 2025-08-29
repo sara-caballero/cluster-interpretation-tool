@@ -74,11 +74,126 @@ contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01
 
 # Documentation section at the bottom of settings
 st.sidebar.markdown("---")
-with st.sidebar.expander("📚 Documentation"):
-    st.markdown("**User Guide**: [How to use this tool](docs/USER_GUIDE.md)")
-    st.markdown("**Technical Guide**: [Algorithms and concepts](docs/TECHNICAL_GUIDE.md)")
-    st.markdown("---")
-    st.markdown("*Both guides are in development*")
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    if st.button("📖 User Guide"):
+        st.session_state.show_user_guide_modal = True
+with col2:
+    if st.button("🔬 Technical Guide"):
+        st.session_state.show_technical_guide_modal = True
+
+# Initialize modal states
+if 'show_user_guide_modal' not in st.session_state:
+    st.session_state.show_user_guide_modal = False
+if 'show_technical_guide_modal' not in st.session_state:
+    st.session_state.show_technical_guide_modal = False
+
+# User Guide Modal
+if st.session_state.show_user_guide_modal:
+    with st.modal("📖 User Guide - Cluster Interpretation Tool"):
+        st.markdown("**⚠️ Tool Development in Progress**")
+        st.markdown("### 🔍 Cluster Interpretation Tool - User Guide")
+        st.markdown("This guide will help you use the Cluster Interpretation Tool to discover patterns and insights in your data through automated clustering analysis.")
+        
+        st.markdown("#### 🚀 Getting Started")
+        st.markdown("- **What You Need**: A CSV file with your data, basic understanding of clustering")
+        st.markdown("- **No programming knowledge required!**")
+        st.markdown("- **What This Tool Does**: Automatically cleans data, finds optimal clusters, groups similar data points, explains cluster characteristics, provides visualizations")
+        
+        st.markdown("#### 📁 Uploading Your Data")
+        st.markdown("- **Supported Format**: CSV files only (.csv extension)")
+        st.markdown("- **Requirements**: At least 2 columns, 10+ rows")
+        st.markdown("- **Mixed data types**: Numbers, text, categories supported")
+        st.markdown("- **Missing values**: Handled automatically")
+        
+        st.markdown("#### ⚙️ Understanding the Settings")
+        st.markdown("- **Target Column**: Optional column to exclude from clustering")
+        st.markdown("- **Scaling**: MinMax (0-1) or Standard (centered) scaling")
+        st.markdown("- **Embedding**: PCA (fast, linear) or UMAP (complex patterns)")
+        st.markdown("- **Outlier Detection**: Isolation Forest or none")
+        st.markdown("- **Clustering Range**: Min/max number of clusters to try")
+        
+        st.markdown("#### 🔧 Preprocessing")
+        st.markdown("- **When Available**: Only when outlier detection is enabled")
+        st.markdown("- **What it Does**: Handles missing values, encodes categories, scales features, removes outliers")
+        st.markdown("- **Summary**: Shows original vs final data shape, outliers removed, features encoded")
+        
+        st.markdown("#### 🚀 Running Clustering")
+        st.markdown("- **Process**: Feature selection → 2D visualization → Optimal K selection → Final clustering → Feature analysis")
+        st.markdown("- **Plots**: Embedding, model selection, final clusters, feature distributions")
+        
+        st.markdown("#### 📊 Interpreting Results")
+        st.markdown("- **Cluster Summaries**: Automated descriptions of each cluster")
+        st.markdown("- **Driver Features**: Most important features for each cluster")
+        st.markdown("- **Visualizations**: 2D plots and feature distribution charts")
+        
+        st.markdown("#### ⬇️ Downloading Results")
+        st.markdown("- **Format**: CSV with original data + cluster assignments")
+        st.markdown("- **Use**: Open in Excel/Sheets for further analysis")
+        
+        st.markdown("#### 🔧 Troubleshooting")
+        st.markdown("- **File upload issues**: Check CSV format")
+        st.markdown("- **No clusters found**: Increase max clusters, check data size")
+        st.markdown("- **Slow performance**: Use PCA instead of UMAP, reduce cluster range")
+        st.markdown("- **Preprocessing fails**: Check data quality, reduce outlier contamination")
+        
+        if st.button("Close"):
+            st.session_state.show_user_guide_modal = False
+            st.rerun()
+
+# Technical Guide Modal
+if st.session_state.show_technical_guide_modal:
+    with st.modal("🔬 Technical Guide - Cluster Interpretation Tool"):
+        st.markdown("**⚠️ Tool Development in Progress**")
+        st.markdown("### 🔬 Cluster Interpretation Tool - Technical Documentation")
+        st.markdown("This document explains the theoretical foundations, algorithmic choices, and technical implementation.")
+        
+        st.markdown("#### 🎯 Overview")
+        st.markdown("- **Problem**: Automatically discover patterns in multivariate data through unsupervised learning")
+        st.markdown("- **Solution**: Complete clustering pipeline with preprocessing, dimensionality reduction, model selection, and interpretation")
+        
+        st.markdown("#### 🔧 Data Preprocessing Pipeline")
+        st.markdown("- **Missing Values**: Median imputation (numerical), mode imputation (categorical)")
+        st.markdown("- **Feature Selection**: Target exclusion, ID detection, type separation")
+        st.markdown("- **Categorical Encoding**: One-hot encoding with drop_first=True")
+        st.markdown("- **Feature Scaling**: MinMax [0,1] or Standard (centered)")
+        st.markdown("- **Outlier Detection**: Isolation Forest algorithm (O(n log n))")
+        
+        st.markdown("#### 📊 Dimensionality Reduction")
+        st.markdown("- **PCA**: Linear relationships, fast O(n²p), interpretable components")
+        st.markdown("- **UMAP**: Non-linear patterns, complex manifolds, local structure preservation")
+        st.markdown("- **Purpose**: Visualization, computational efficiency, curse of dimensionality mitigation")
+        
+        st.markdown("#### 🎯 Clustering Algorithm")
+        st.markdown("- **K-means**: Lloyd's algorithm, minimize within-cluster sum of squares")
+        st.markdown("- **Advantages**: Simple, scalable, interpretable, mature")
+        st.markdown("- **Limitations**: Local optima, spherical clusters assumption")
+        st.markdown("- **Initialization**: Multiple runs (n_init=10), best result selection")
+        
+        st.markdown("#### 🔍 Model Selection")
+        st.markdown("- **Elbow Method**: Inertia curve analysis")
+        st.markdown("- **Silhouette Analysis**: Quantitative cluster quality measure [-1,1]")
+        st.markdown("- **Automated Selection**: Peak detection + elbow detection + consensus")
+        
+        st.markdown("#### 📈 Cluster Interpretation")
+        st.markdown("- **Feature Importance**: Deviation analysis from global means")
+        st.markdown("- **Description Generation**: Template-based natural language")
+        st.markdown("- **Visualization**: 2D embeddings, feature distribution plots")
+        
+        st.markdown("#### ⚡ Performance Considerations")
+        st.markdown("- **Complexity**: Preprocessing O(n×p), K-means O(n×k×d×iterations)")
+        st.markdown("- **Memory**: Data storage O(n×p), results O(n)")
+        st.markdown("- **Optimization**: Early stopping, parallel processing, memory management")
+        
+        st.markdown("#### ⚠️ Limitations and Assumptions")
+        st.markdown("- **K-means**: Spherical clusters, equal sizes, no overlap")
+        st.markdown("- **Dimensionality Reduction**: Information loss, high-dimensional patterns")
+        st.markdown("- **Data**: Feature independence, quality, scale comparability")
+        st.markdown("- **Practical**: Requires domain knowledge, correlation ≠ causation")
+        
+        if st.button("Close"):
+            st.session_state.show_technical_guide_modal = False
+            st.rerun()
 
 # Main content area
 if file:
