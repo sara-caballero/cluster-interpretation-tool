@@ -144,7 +144,7 @@ if file:
         with col1:
             if st.button("🔧 Preprocess Data"):
                 with st.spinner("Preprocessing data..."):
-                                        preprocessed_info = preprocess_data(
+                    preprocessed_info = preprocess_data(
                         file_path=tmp_path,
                         target=target,
                         excluded_cols=excluded_cols,
