@@ -129,7 +129,7 @@ if file:
         
         # Show data distribution
         with st.expander("Data Distribution"):
-            fig, axes = plt.subplots(2, 2, figsize=(5, 4))
+            fig, axes = plt.subplots(2, 2, figsize=(8, 6))
             
             # Feature distributions
             sample_features = preprocessed_info['features_used'][:4]  # Show first 4 features
