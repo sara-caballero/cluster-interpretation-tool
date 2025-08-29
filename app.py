@@ -40,6 +40,13 @@ def streamlit_matplotlib():
     finally:
         plt.show = orig_show
 
+# ---- Settings and Documentation (Always Visible) ----
+st.sidebar.header("⚙️ Settings")
+
+# Initialize variables
+target = None
+all_cols = []
+
 # ---- Upload CSV ----
 file = st.file_uploader("Upload a CSV file", type=["csv"])
 
@@ -51,28 +58,30 @@ if file:
 
     # quick peek (limits huge files)
     df_preview = pd.read_csv(tmp_path, nrows=500)
+    all_cols = list(df_preview.columns)
+    
     with st.expander("🔎 Preview (first 500 rows)"):
         st.dataframe(df_preview)
 
-    # ---- Controls ----
-    st.sidebar.header("⚙️ Settings")
-    all_cols = list(df_preview.columns)
-    target = st.sidebar.selectbox("Target column (optional)", [None] + all_cols, index=0)
-    scaling = st.sidebar.radio("Scaling", ["minmax", "standard", "none"], index=0)
-    embedder = st.sidebar.radio("Embedding (for plots)", ["PCA", "UMAP"], index=0)
-    cluster_on_features = st.sidebar.checkbox("Cluster on full features (recommended)", value=True)
-    max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
-    outlier_method = st.sidebar.radio("Outlier removal", ["isoforest", "none"], index=0)
-    contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01)
-    
-    # Documentation section at the bottom of settings
-    st.sidebar.markdown("---")
-    with st.sidebar.expander("📚 Documentation"):
-        st.markdown("**User Guide**: [How to use this tool](docs/USER_GUIDE.md)")
-        st.markdown("**Technical Guide**: [Algorithms and concepts](docs/TECHNICAL_GUIDE.md)")
-        st.markdown("---")
-        st.markdown("*Both guides are in development*")
+# Settings that are always available
+target = st.sidebar.selectbox("Target column (optional)", [None] + all_cols, index=0)
+scaling = st.sidebar.radio("Scaling", ["minmax", "standard", "none"], index=0)
+embedder = st.sidebar.radio("Embedding (for plots)", ["PCA", "UMAP"], index=0)
+cluster_on_features = st.sidebar.checkbox("Cluster on full features (recommended)", value=True)
+max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
+outlier_method = st.sidebar.radio("Outlier removal", ["isoforest", "none"], index=0)
+contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01)
 
+# Documentation section at the bottom of settings
+st.sidebar.markdown("---")
+with st.sidebar.expander("📚 Documentation"):
+    st.markdown("**User Guide**: [How to use this tool](docs/USER_GUIDE.md)")
+    st.markdown("**Technical Guide**: [Algorithms and concepts](docs/TECHNICAL_GUIDE.md)")
+    st.markdown("---")
+    st.markdown("*Both guides are in development*")
+
+# Main content area
+if file:
     # Initialize session state for preprocessed data
     if 'preprocessed_data' not in st.session_state:
         st.session_state.preprocessed_data = None
