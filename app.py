@@ -129,16 +129,28 @@ if file:
         
         # Show data distribution
         with st.expander("Data Distribution"):
-            fig, axes = plt.subplots(2, 2, figsize=(8, 6))
+            # Calculate grid size based on number of features (max 10)
+            n_features = min(len(preprocessed_info['features_used']), 10)
+            n_cols = 3
+            n_rows = (n_features + n_cols - 1) // n_cols  # Ceiling division
+            
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 4 * n_rows))
+            if n_rows == 1:
+                axes = axes.reshape(1, -1)
             
             # Feature distributions
-            sample_features = preprocessed_info['features_used'][:10]  # Show first 4 features
+            sample_features = preprocessed_info['features_used'][:n_features]
             for i, feature in enumerate(sample_features):
-                row, col = i // 2, i % 2
+                row, col = i // n_cols, i % n_cols
                 axes[row, col].hist(preprocessed_info['scaled_data'][feature], bins=20, alpha=0.7)
                 axes[row, col].set_title(f'{feature} Distribution')
                 axes[row, col].set_xlabel('Value')
                 axes[row, col].set_ylabel('Frequency')
+            
+            # Hide empty subplots
+            for i in range(n_features, n_rows * n_cols):
+                row, col = i // n_cols, i % n_cols
+                axes[row, col].set_visible(False)
             
             plt.tight_layout()
             st.pyplot(fig)
