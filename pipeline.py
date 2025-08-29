@@ -311,14 +311,6 @@ def run_pipeline(
 
     embed = pd.DataFrame({"X": emb_xy[:, 0], "Y": emb_xy[:, 1]}, index=X_scaled.index)
 
-    # Show embedding plot first
-    plt.figure(figsize=(5, 5))
-    plt.scatter(embed["X"], embed["Y"], s=10)
-    plt.title(f"{embedder} embedding")
-    plt.xticks([])
-    plt.yticks([])
-    plt.show()
-
     # STEP 7: Choose what to cluster on
     # (original features or 2D embedding)
     data_for_kmeans = X_scaled if cluster_on_features else embed
@@ -347,8 +339,8 @@ def run_pipeline(
         angles.append(ang)
         angles.append(180.0)
 
-    # Create 3-column grid for main plots after K-means evaluation
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    # Create 2-column grid for main plots after K-means evaluation
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     
     # Plot 1: Embedding
     axes[0].scatter(embed["X"], embed["Y"], s=10)
@@ -378,8 +370,6 @@ def run_pipeline(
     ax1.legend(loc="upper right")
     ax1.set_title("KMeans model selection")
     
-    # Plot 3: Will be filled with PCA+K-means after clustering
-    
     plt.tight_layout()
     plt.show()
 
@@ -394,46 +384,14 @@ def run_pipeline(
     print(f"KMeans silhouette at k={best_k}: {sil_final:.3f}")
 
     # STEP 11: Plot clusters on 2D embedding
-    fig2, axes2 = plt.subplots(1, 3, figsize=(15, 5))
-    
-    # Plot 1: Original embedding (repeated for comparison)
-    axes2[0].scatter(embed["X"], embed["Y"], s=10)
-    axes2[0].set_title(f"{embedder} embedding")
-    axes2[0].set_xticks([])
-    axes2[0].set_yticks([])
-    
-    # Plot 2: K-means model selection (repeated for comparison)
-    ax1 = axes2[1]
-    ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
-    ax1.set_xlabel("number of clusters (k)")
-    ax1.set_ylabel("normalized inertia [0..1]")
-    ax2 = ax1.twinx()
-    ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
-    ax2.set_ylabel("silhouette [-1..1]")
-    
-    # add tiny labels so it's easier to read (with bounds checking)
-    for i, s in enumerate(sils):
-        is_peak = (i == 0 or s >= sils[i-1]) and (i == len(sils)-1 or s >= sils[i+1])
-        if is_peak:
-            ax2.text(k_vals[i], s, f'k={k_vals[i]}\n{s:.2f}', ha="center", va="bottom")
-    for a in range(1, len(angles) - 1):
-        if angles[a-1] >= angles[a] <= angles[a+1] and a < len(k_vals) and a < len(inertia_norm):
-            ax1.text(k_vals[a], float(inertia_norm[a]), f'k={k_vals[a]}\n{angles[a]:.1f}°',
-                     ha="center", va="bottom")
-    
-    ax1.legend(loc="upper right")
-    ax1.set_title("KMeans model selection")
-    
-    # Plot 3: Clusters on 2D embedding
+    plt.figure(figsize=(6, 5))
     for c in sorted(labels_kmeans.unique()):
         pts = embed.loc[labels_kmeans == c]
-        axes2[2].scatter(pts["X"], pts["Y"], s=10, label=f"Cluster {c}")
-    axes2[2].legend()
-    axes2[2].set_title(f"{embedder} + KMeans(k={best_k})")
-    axes2[2].set_xticks([])
-    axes2[2].set_yticks([])
-    
-    plt.tight_layout()
+        plt.scatter(pts["X"], pts["Y"], s=10, label=f"Cluster {c}")
+    plt.legend()
+    plt.title(f"{embedder} + KMeans(k={best_k})")
+    plt.xticks([])
+    plt.yticks([])
     plt.show()
 
     # STEP 12: Interpret clusters
