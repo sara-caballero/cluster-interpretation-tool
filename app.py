@@ -11,16 +11,7 @@ from pipeline import run_pipeline, auto_describe_clusters, preprocess_data
 st.set_page_config(page_title="Cluster Interpretation Tool", layout="wide")
 st.title("🔍 Cluster Interpretation Tool")
 
-# Add documentation links
-col1, col2 = st.columns([3, 1])
-with col1:
-    st.markdown("Discover patterns and insights in your data through automated clustering analysis.")
-with col2:
-    with st.expander("📚 Documentation"):
-        st.markdown("**User Guide**: [How to use this tool](docs/USER_GUIDE.md)")
-        st.markdown("**Technical Guide**: [Algorithms and concepts](docs/TECHNICAL_GUIDE.md)")
-        st.markdown("---")
-        st.markdown("*Both guides are in development*")
+st.markdown("Discover patterns and insights in your data through automated clustering analysis.")
 
 st.markdown(
     """
@@ -73,6 +64,14 @@ if file:
     max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
     outlier_method = st.sidebar.radio("Outlier removal", ["isoforest", "none"], index=0)
     contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01)
+    
+    # Documentation section at the bottom of settings
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("📚 Documentation"):
+        st.markdown("**User Guide**: [How to use this tool](docs/USER_GUIDE.md)")
+        st.markdown("**Technical Guide**: [Algorithms and concepts](docs/TECHNICAL_GUIDE.md)")
+        st.markdown("---")
+        st.markdown("*Both guides are in development*")
 
     # Initialize session state for preprocessed data
     if 'preprocessed_data' not in st.session_state:
