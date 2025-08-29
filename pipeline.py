@@ -371,7 +371,7 @@ def run_pipeline(
         if is_peak:
             ax2.text(k_vals[i], s, f'k={k_vals[i]}\n{s:.2f}', ha="center", va="bottom")
     for a in range(1, len(angles) - 1):
-        if angles[a-1] >= angles[a] <= angles[a+1]:
+        if angles[a-1] >= angles[a] <= angles[a+1] and a < len(k_vals) and a < len(inertia_norm):
             ax1.text(k_vals[a], float(inertia_norm[a]), f'k={k_vals[a]}\n{angles[a]:.1f}°',
                      ha="center", va="bottom")
 
@@ -410,6 +410,17 @@ def run_pipeline(
     ax2 = ax1.twinx()
     ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
     ax2.set_ylabel("silhouette [-1..1]")
+    
+    # add tiny labels so it's easier to read (with bounds checking)
+    for i, s in enumerate(sils):
+        is_peak = (i == 0 or s >= sils[i-1]) and (i == len(sils)-1 or s >= sils[i+1])
+        if is_peak:
+            ax2.text(k_vals[i], s, f'k={k_vals[i]}\n{s:.2f}', ha="center", va="bottom")
+    for a in range(1, len(angles) - 1):
+        if angles[a-1] >= angles[a] <= angles[a+1] and a < len(k_vals) and a < len(inertia_norm):
+            ax1.text(k_vals[a], float(inertia_norm[a]), f'k={k_vals[a]}\n{angles[a]:.1f}°',
+                     ha="center", va="bottom")
+    
     ax1.legend(loc="upper right")
     ax1.set_title("KMeans model selection")
     
