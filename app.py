@@ -67,15 +67,15 @@ if file:
 target = st.sidebar.selectbox("Target column (optional)", [None] + all_cols, index=0)
 
 # Column exclusion settings
-st.sidebar.markdown("### Column Selection")
-if all_cols:
-    excluded_cols = st.sidebar.multiselect(
-        "Exclude columns from clustering", 
-        all_cols,
-        help="Select columns you don't want to use as features (e.g., IDs, timestamps)"
-    )
-else:
-    excluded_cols = []
+excluded_cols = st.sidebar.multiselect(
+    "Exclude columns from clustering (optional)", 
+    [None] + all_cols if all_cols else [None],
+    default=None,
+    help="Select columns you don't want to use as features (e.g., IDs, timestamps)"
+)
+# Remove None from the list if it was selected
+if None in excluded_cols:
+    excluded_cols.remove(None)
 
 scaling = st.sidebar.radio("Scaling", ["minmax", "standard", "none"], index=0)
 embedder = st.sidebar.radio("Embedding (for plots)", ["PCA", "UMAP"], index=0)
