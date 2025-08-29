@@ -74,10 +74,23 @@ contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01
 
 # Documentation section at the bottom of settings
 st.sidebar.markdown("---")
-with st.sidebar.expander("📚 Documentation"):
-    doc_choice = st.radio("Choose documentation:", ["User Guide", "Technical Guide"])
-    
-    if doc_choice == "User Guide":
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    if st.button("📖 User Guide"):
+        st.session_state.show_user_guide_modal = True
+with col2:
+    if st.button("🔬 Technical Guide"):
+        st.session_state.show_technical_guide_modal = True
+
+# Initialize modal states
+if 'show_user_guide_modal' not in st.session_state:
+    st.session_state.show_user_guide_modal = False
+if 'show_technical_guide_modal' not in st.session_state:
+    st.session_state.show_technical_guide_modal = False
+
+# User Guide Modal
+if st.session_state.show_user_guide_modal:
+    with st.modal("📖 User Guide - Cluster Interpretation Tool"):
         st.markdown("**⚠️ Tool Development in Progress**")
         st.markdown("### 🔍 Cluster Interpretation Tool - User Guide")
         st.markdown("This guide will help you use the Cluster Interpretation Tool to discover patterns and insights in your data through automated clustering analysis.")
@@ -124,7 +137,13 @@ with st.sidebar.expander("📚 Documentation"):
         st.markdown("- **Slow performance**: Use PCA instead of UMAP, reduce cluster range")
         st.markdown("- **Preprocessing fails**: Check data quality, reduce outlier contamination")
         
-    else:  # Technical Guide
+        if st.button("Close"):
+            st.session_state.show_user_guide_modal = False
+            st.rerun()
+
+# Technical Guide Modal
+if st.session_state.show_technical_guide_modal:
+    with st.modal("🔬 Technical Guide - Cluster Interpretation Tool"):
         st.markdown("**⚠️ Tool Development in Progress**")
         st.markdown("### 🔬 Cluster Interpretation Tool - Technical Documentation")
         st.markdown("This document explains the theoretical foundations, algorithmic choices, and technical implementation.")
@@ -171,9 +190,10 @@ with st.sidebar.expander("📚 Documentation"):
         st.markdown("- **Dimensionality Reduction**: Information loss, high-dimensional patterns")
         st.markdown("- **Data**: Feature independence, quality, scale comparability")
         st.markdown("- **Practical**: Requires domain knowledge, correlation ≠ causation")
-    
-    st.markdown("---")
-    st.markdown("*For detailed information, refer to the complete documentation files in the project repository.*")
+        
+        if st.button("Close"):
+            st.session_state.show_technical_guide_modal = False
+            st.rerun()
 
 # Main content area
 if file:
