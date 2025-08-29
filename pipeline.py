@@ -311,7 +311,43 @@ def run_pipeline(
 
     embed = pd.DataFrame({"X": emb_xy[:, 0], "Y": emb_xy[:, 1]}, index=X_scaled.index)
 
-    # Create 3-column grid for main plots
+    # Show embedding plot first
+    plt.figure(figsize=(5, 5))
+    plt.scatter(embed["X"], embed["Y"], s=10)
+    plt.title(f"{embedder} embedding")
+    plt.xticks([])
+    plt.yticks([])
+    plt.show()
+
+    # STEP 7: Choose what to cluster on
+    # (original features or 2D embedding)
+    data_for_kmeans = X_scaled if cluster_on_features else embed
+
+    # STEP 8: Try different k values
+    # Compute inertia + silhouette
+    print("Evaluating k for KMeans...")
+    k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
+    if len(k_vals) == 0:
+        raise ValueError("Not enough rows to evaluate k (maybe max_k too big?).")
+
+    inertias, sils = [], []
+    for k in k_vals:
+        km  = KMeans(n_clusters=k, init="k-means++", n_init=20, random_state=42)
+        lab = km.fit_predict(data_for_kmeans)
+        inertias.append(km.inertia_)
+        sils.append(silhouette_score(data_for_kmeans, lab))
+    inertia_norm = np.asarray(inertias, float) / max(inertias)
+
+    # elbow "angles" (like the class template)
+    angles = [180.0]
+    for i in range(1, len(inertia_norm) - 1):
+        left  = inertia_norm[i] - inertia_norm[i - 1]
+        right = inertia_norm[i + 1] - inertia_norm[i]
+        ang = 180.0 - math.degrees(math.atan((right - left) / (1 + (right * left))))
+        angles.append(ang)
+        angles.append(180.0)
+
+    # Create 3-column grid for main plots after K-means evaluation
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     
     # Plot 1: Embedding
@@ -346,36 +382,6 @@ def run_pipeline(
     
     plt.tight_layout()
     plt.show()
-
-    # STEP 7: Choose what to cluster on
-    # (original features or 2D embedding)
-    data_for_kmeans = X_scaled if cluster_on_features else embed
-
-    # STEP 8: Try different k values
-    # Compute inertia + silhouette
-    print("Evaluating k for KMeans...")
-    k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
-    if len(k_vals) == 0:
-        raise ValueError("Not enough rows to evaluate k (maybe max_k too big?).")
-
-    inertias, sils = [], []
-    for k in k_vals:
-        km  = KMeans(n_clusters=k, init="k-means++", n_init=20, random_state=42)
-        lab = km.fit_predict(data_for_kmeans)
-        inertias.append(km.inertia_)
-        sils.append(silhouette_score(data_for_kmeans, lab))
-    inertia_norm = np.asarray(inertias, float) / max(inertias)
-
-    # elbow "angles" (like the class template)
-    angles = [180.0]
-    for i in range(1, len(inertia_norm) - 1):
-        left  = inertia_norm[i] - inertia_norm[i - 1]
-        right = inertia_norm[i + 1] - inertia_norm[i]
-        ang = 180.0 - math.degrees(math.atan((right - left) / (1 + (right * left))))
-        angles.append(ang)
-    angles.append(180.0)
-
-
 
     # STEP 9: Auto-pick the best k
     best_k, why = pick_k_auto(k_vals, inertia_norm, sils, angles)
