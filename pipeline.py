@@ -346,7 +346,7 @@ def run_pipeline(
     angles.append(180.0)
 
     # plot both curves on two y-axes so we can see them
-    fig, ax1 = plt.subplots(figsize=(2, 2))
+    fig, ax1 = plt.subplots(figsize=(5, 5))
     ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
     ax1.set_xlabel("number of clusters (k)")
     ax1.set_ylabel("normalized inertia [0..1]")
@@ -393,14 +393,31 @@ def run_pipeline(
     drivers_km = explain_clusters_numeric(X_scaled, labels_kmeans, top_n=5)
 
      # STEP 13: Feature distributions
-    print("KMeans: feature distributions by cluster (boxplots)...")
-    tmp = X_scaled.copy()
-    tmp["Cluster"] = labels_kmeans.values
-    for col in X_scaled.columns[:min(12, X_scaled.shape[1])]:
-        plt.figure(figsize=(4, 3))
-        sns.boxplot(x="Cluster", y=col, data=tmp)
-        plt.title(f"{col} by cluster (KMeans)")
-        plt.show()
+     print("KMeans: feature distributions by cluster (boxplots)...")
+     tmp = X_scaled.copy()
+     tmp["Cluster"] = labels_kmeans.values
+     
+     # Calculate grid size based on number of features (max 12)
+     n_features = min(len(X_scaled.columns), 12)
+     n_cols = 3
+     n_rows = (n_features + n_cols - 1) // n_cols  # Ceiling division
+     
+     fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 4 * n_rows))
+     if n_rows == 1:
+         axes = axes.reshape(1, -1)
+     
+     for i, col in enumerate(X_scaled.columns[:n_features]):
+         row, col_idx = i // n_cols, i % n_cols
+         sns.boxplot(x="Cluster", y=col, data=tmp, ax=axes[row, col_idx])
+         axes[row, col_idx].set_title(f"{col} by cluster (KMeans)")
+     
+     # Hide empty subplots
+     for i in range(n_features, n_rows * n_cols):
+         row, col_idx = i // n_cols, i % n_cols
+         axes[row, col_idx].set_visible(False)
+     
+     plt.tight_layout()
+     plt.show()
 
    # STEP 14: Optional Sankey diagram
     if draw_sankey and HAS_SANKEY and not drivers_km.empty:
