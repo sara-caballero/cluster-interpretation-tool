@@ -5,6 +5,20 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import contextlib
 
+
+# --- ultra-light ping endpoint for uptime monitors ---
+try:
+    # Streamlit >= 1.30
+    qp = st.query_params
+except Exception:
+    # Fallback para versiones antiguas
+    qp = st.experimental_get_query_params()
+
+if (qp.get("ping") == ["1"]) or (qp.get("ping") == "1"):
+    st.write("ok")
+    st.stop()
+
+
 # your pipeline + auto_describe live here:
 from pipeline import run_pipeline, auto_describe_clusters, preprocess_data
 
