@@ -166,6 +166,7 @@ def preprocess_data(
     # STEP 1: Load the dataset
     print("Reading CSV...")
     raw = pd.read_csv(file_path)
+    original_shape = raw.shape  # Save original shape before any modifications
     
     # STEP 2: Select features
     feat_cols = list(raw.columns)
@@ -224,7 +225,7 @@ def preprocess_data(
     
     # Create preprocessing summary
     preprocessing_info = {
-        "original_shape": raw.shape,
+        "original_shape": original_shape,  # Use saved original shape
         "final_shape": X_scaled.shape,
         "features_used": list(X_scaled.columns),
         "scaling_method": scaling,
