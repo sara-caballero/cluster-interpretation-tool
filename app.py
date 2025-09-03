@@ -70,8 +70,26 @@ if file:
         tmp.write(file.read())
         tmp_path = tmp.name
 
-    # quick peek (limits huge files)
-    df_preview = pd.read_csv(tmp_path, nrows=500)
+    # Column separator selection
+    st.subheader("📁 File Configuration")
+    separator = st.selectbox(
+        "Column separator",
+        ["comma", "semicolon", "tab", "space"],
+        index=0,
+        help="Select the character that separates columns in your CSV file"
+    )
+    
+    # Map separator names to actual characters
+    separator_map = {
+        "comma": ",",
+        "semicolon": ";", 
+        "tab": "\t",
+        "space": " "
+    }
+    sep_char = separator_map[separator]
+    
+    # quick peek (limits huge files) - now using selected separator
+    df_preview = pd.read_csv(tmp_path, sep=sep_char, nrows=500)
     all_cols = list(df_preview.columns)
     
     with st.expander("🔎 Preview (first 500 rows)"):
@@ -170,6 +188,7 @@ if file:
                         scaling=scaling,
                         outlier_method=outlier_method,
                         contamination=contamination,
+                        separator=sep_char,
                     )
                     st.session_state.preprocessed_data = preprocessed_info
 
@@ -279,6 +298,7 @@ if file:
                         outlier_method=outlier_method,
                         contamination=contamination,
                         preprocessed_data=preprocessed_data,
+                        separator=sep_char,
                     )
 
             st.success("Done!")

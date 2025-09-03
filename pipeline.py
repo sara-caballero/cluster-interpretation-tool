@@ -157,6 +157,7 @@ def preprocess_data(
     scaling="minmax",
     outlier_method="isoforest",
     contamination=0.03,
+    separator=",",
 ):
     """
     Preprocess data for clustering: load, clean, encode, scale, and remove outliers.
@@ -165,7 +166,7 @@ def preprocess_data(
     
     # STEP 1: Load the dataset
     print("Reading CSV...")
-    raw = pd.read_csv(file_path)
+    raw = pd.read_csv(file_path, sep=separator)
     original_shape = raw.shape  # Save original shape before any modifications
     
     # STEP 2: Select features
@@ -256,6 +257,7 @@ def run_pipeline(
     contamination=0.03,        # ~3% outliers to drop. higher value -> more aggresive.
     draw_sankey=False,         # optional
     preprocessed_data=None,    # if provided, skip preprocessing
+    separator=",",             # column separator for CSV reading
 ):
 
     # Use preprocessed data if provided, otherwise preprocess
@@ -266,7 +268,7 @@ def run_pipeline(
     else:
         # STEP 1: Load the dataset
         print("Reading CSV...")
-        raw = pd.read_csv(file_path)
+        raw = pd.read_csv(file_path, sep=separator)
 
         # STEP 2: Select features
         feat_cols = list(raw.columns)
