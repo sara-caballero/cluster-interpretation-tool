@@ -1,10 +1,5 @@
-# CLUSTERING PIPELINE
-
-# 1. Load and clean data
-# 2. Scale and (optionally) remove outliers
-# 3. Create a 2D embedding for visualization
-# 4. Run KMeans with automatic k selection
-# 5. Interpret clusters with plots + summaries
+# Clustering Analysis Pipeline
+# Implements automated clustering with visualization and interpretation
 
 import math
 import numpy as np
@@ -32,22 +27,19 @@ except Exception:
     HAS_SANKEY = False
 
 
-# HELPERS (Small utilities used throughout the pipeline)
+# Utility functions
 
 def minmax_df(df):
-    # quick min-max scaler that doesn't blow up on constant columns
+    # Min-max scaling with constant column handling
     mins = df.min()
     rng  = df.max() - mins
-    rng  = rng.replace(0, 1.0)  # avoid divide by zero
+    rng  = rng.replace(0, 1.0)
     return (df - mins) / rng
 
 def pick_k_auto(k_values, inertia_norm, silhouettes, angles,
                 elbow_angle_thresh=170.0, silhouette_floor=0.25, sil_within=0.02):
-    # Decide automatically the "best" k for KMeans.
-    # Logic:
-    # - If silhouette is good → pick the smallest k close to the best.
-    # - Else if the elbow curve looks sharp → pick that k.
-    # - Else → fall back to smallest k near best silhouette.
+    # Automatic k selection for KMeans clustering
+    # Combines silhouette analysis and elbow method
     kv   = list(k_values)
     inert = np.asarray(inertia_norm, float)
     sil   = np.asarray(silhouettes, float)
@@ -68,7 +60,7 @@ def pick_k_auto(k_values, inertia_norm, silhouettes, angles,
     if elbow_idx is not None and 1 <= elbow_idx < len(inert) - 1:
         drop_prev = inert[elbow_idx-1] - inert[elbow_idx]
         drop_next = inert[elbow_idx] - inert[elbow_idx+1]
-        slope_ratio = drop_next / max(drop_prev, 1e-9)  # smaller = sharper elbow
+        slope_ratio = drop_next / max(drop_prev, 1e-9)
         if (elbow_angle is not None) and (elbow_angle <= elbow_angle_thresh) and (slope_ratio < 0.75):
             elbow_strong = True
 
@@ -87,8 +79,8 @@ def pick_k_auto(k_values, inertia_norm, silhouettes, angles,
                "elbow_angle": elbow_angle, "elbow_strong": elbow_strong, "slope_ratio": slope_ratio}
 
 def explain_clusters_numeric(X_df, labels, top_n=5):
-    # For each cluster, compare its median to the overall median.
-    # Rank features by how much they differ (z-score).
+    # Analyze cluster characteristics by comparing medians
+    # Returns ranked features by statistical significance
     out = []
     overall_med = X_df.median()
     overall_std = X_df.std().replace(0, 1.0)
@@ -116,8 +108,7 @@ def explain_clusters_numeric(X_df, labels, top_n=5):
     return pd.DataFrame(out)
 
 def sankey_top_flows(df, labels, features, bins=3, title="Top drivers → Clusters"):
-    # optional viz, not required; only runs if pySankey is installed
-    # Shows how feature bins (left) "flow" into clusters (right).
+    # Generate Sankey diagram showing feature-to-cluster relationships
     if not HAS_SANKEY:
         print("Sankey not installed, skipping.")
         return
@@ -146,9 +137,7 @@ def sankey_top_flows(df, labels, features, bins=3, title="Top drivers → Cluste
     plt.show()
 
 
-# -------------------------
-# preprocessing function
-# -------------------------
+# Data preprocessing functions
 
 def preprocess_data(
     file_path,
@@ -160,16 +149,27 @@ def preprocess_data(
     separator=",",
 ):
     """
-    Preprocess data for clustering: load, clean, encode, scale, and remove outliers.
-    Returns preprocessed data and metadata for display.
+    Preprocess data for clustering analysis.
+    
+    Args:
+        file_path: Path to CSV file
+        target: Target column name (optional)
+        excluded_cols: Columns to exclude from analysis
+        scaling: Scaling method ('minmax', 'standard', 'none')
+        outlier_method: Outlier detection method
+        contamination: Outlier contamination ratio
+        separator: CSV separator character
+    
+    Returns:
+        dict: Preprocessing results and metadata
     """
     
-    # STEP 1: Load the dataset
+    # Load dataset
     print("Reading CSV...")
     raw = pd.read_csv(file_path, sep=separator)
-    original_shape = raw.shape  # Save original shape before any modifications
+    original_shape = raw.shape
     
-    # STEP 2: Select features
+    # Feature selection
     feat_cols = list(raw.columns)
     if target is not None and target in feat_cols:
         feat_cols.remove(target)
@@ -179,8 +179,7 @@ def preprocess_data(
                 feat_cols.remove(col)
     X = raw[feat_cols].copy()
     
-    # STEP 3: Encode categorical features
-    # Identify categorical columns before encoding
+    # Categorical feature encoding
     categorical_cols = []
     for col in X.columns:
         if X[col].dtype == 'object' or X[col].dtype == 'category':
@@ -191,7 +190,7 @@ def preprocess_data(
         if X_encoded[c].dtype == bool:
             X_encoded[c] = X_encoded[c].astype(float)
     
-    # STEP 4: Scale features
+    # Feature scaling
     if scaling == "standard":
         scaler = StandardScaler()
         X_scaled = pd.DataFrame(scaler.fit_transform(X_encoded), columns=X_encoded.columns, index=X_encoded.index)
@@ -204,12 +203,12 @@ def preprocess_data(
     
     print("Data shape after prep:", X_scaled.shape)
     
-    # STEP 5: Remove outliers
+    # Outlier removal
     outliers_removed = 0
     if outlier_method == "isoforest":
         print(f"Removing outliers with IsolationForest (contamination={contamination:.3f})...")
         iso  = IsolationForest(contamination=contamination, random_state=42)
-        pred = iso.fit_predict(X_scaled.values)  # 1=inlier, -1=outlier
+        pred = iso.fit_predict(X_scaled.values)
         keep = pred == 1
         n_out = int((~keep).sum())
         if n_out > 0 and keep.sum() >= 10:
@@ -224,9 +223,9 @@ def preprocess_data(
     else:
         raise ValueError("outlier_method must be 'isoforest' or 'none'")
     
-    # Create preprocessing summary
+    # Compile preprocessing results
     preprocessing_info = {
-        "original_shape": original_shape,  # Use saved original shape
+        "original_shape": original_shape,
         "final_shape": X_scaled.shape,
         "features_used": list(X_scaled.columns),
         "scaling_method": scaling,
@@ -240,37 +239,35 @@ def preprocess_data(
     return preprocessing_info
 
 
-# -------------------------
-# main function
-# -------------------------
+# Main clustering pipeline
 
 def run_pipeline(
     file_path,
-    target=None,               # set to your target col or None (not used for clustering, just for comparison)
-    excluded_cols=None,        # columns to exclude from clustering
-    scaling="minmax",          # "minmax", "standard", or "none"
-    embedder="PCA",            # method for 2D plot: "PCA", "UMAP", or "tSNE". IMP! This does not affect clustering if cluster_on_features=True
-    cluster_on_features=True,  # True = cluster on scaled features, False = cluster on 2D embedding
-    max_k=10,                  # maximum number of clusters to try
-    manual_k=None,             # manual k value override (if provided, skips auto-selection)
-    outlier_method="isoforest",# method to drop outliers ("isoforest" or "none")
-    contamination=0.03,        # ~3% outliers to drop. higher value -> more aggresive.
-    draw_sankey=False,         # optional
-    preprocessed_data=None,    # if provided, skip preprocessing
-    separator=",",             # column separator for CSV reading
+    target=None,
+    excluded_cols=None,
+    scaling="minmax",
+    embedder="PCA",
+    cluster_on_features=True,
+    max_k=10,
+    manual_k=None,
+    outlier_method="isoforest",
+    contamination=0.03,
+    draw_sankey=False,
+    preprocessed_data=None,
+    separator=",",
 ):
 
-    # Use preprocessed data if provided, otherwise preprocess
+    # Handle preprocessed data or perform preprocessing
     if preprocessed_data is not None:
         X_scaled = preprocessed_data["scaled_data"]
         raw = preprocessed_data["raw_data"]
         print("Using preprocessed data...")
     else:
-        # STEP 1: Load the dataset
+        # Load dataset
         print("Reading CSV...")
         raw = pd.read_csv(file_path, sep=separator)
 
-        # STEP 2: Select features
+        # Feature selection
         feat_cols = list(raw.columns)
         if target is not None and target in feat_cols:
             feat_cols.remove(target)
@@ -280,13 +277,13 @@ def run_pipeline(
                     feat_cols.remove(col)
         X = raw[feat_cols].copy()
 
-        # STEP 3: Encode categorical features
+        # Categorical encoding
         X = pd.get_dummies(X, drop_first=True, dtype=float)
         for c in X.columns:
             if X[c].dtype == bool:
                 X[c] = X[c].astype(float)
 
-        # STEP 4: Scale features
+        # Feature scaling
         if scaling == "standard":
             scaler = StandardScaler()
             X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
@@ -299,11 +296,11 @@ def run_pipeline(
 
         print("Data shape after prep:", X_scaled.shape)
 
-        # STEP 5: Remove outliers
+        # Outlier removal
         if outlier_method == "isoforest":
             print(f"Removing outliers with IsolationForest (contamination={contamination:.3f})...")
             iso  = IsolationForest(contamination=contamination, random_state=42)
-            pred = iso.fit_predict(X_scaled.values)  # 1=inlier, -1=outlier
+            pred = iso.fit_predict(X_scaled.values)
             keep = pred == 1
             n_out = int((~keep).sum())
             if n_out > 0 and keep.sum() >= 10:
@@ -317,8 +314,7 @@ def run_pipeline(
         else:
             raise ValueError("outlier_method must be 'isoforest' or 'none'")
 
-    # STEP 6: Create a 2D embedding for visualization
-    # (not used for clustering unless cluster_on_features=False)
+    # Generate 2D embedding for visualization
     print(f"Computing {embedder} embedding for plots...")
     if embedder.upper() == "UMAP":
         if HAS_UMAP:
@@ -331,17 +327,16 @@ def run_pipeline(
 
     embed = pd.DataFrame({"X": emb_xy[:, 0], "Y": emb_xy[:, 1]}, index=X_scaled.index)
 
-    # STEP 7: Choose what to cluster on
-    # (original features or 2D embedding)
+    # Select clustering data source
     data_for_kmeans = X_scaled if cluster_on_features else embed
 
-    # STEP 8: Determine k value (auto or manual)
+    # K value determination
     if manual_k is not None:
-        # Manual k override
+        # Use manual k value
         best_k = manual_k
         print(f"Using manual k value: {best_k}")
         
-        # Still create model selection plot for reference (if max_k is available)
+        # Generate reference plots for manual k
         if max_k is not None:
             k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
             if len(k_vals) > 0:
@@ -353,16 +348,16 @@ def run_pipeline(
                     sils.append(silhouette_score(data_for_kmeans, lab))
                 inertia_norm = np.asarray(inertias, float) / max(inertias)
                 
-                # Create model selection plot
+                # Model selection visualization
                 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
                 
-                # Plot 1: Embedding
+                # Embedding plot
                 axes[0].scatter(embed["X"], embed["Y"], s=10)
                 axes[0].set_title(f"{embedder} embedding")
                 axes[0].set_xticks([])
                 axes[0].set_yticks([])
                 
-                # Plot 2: K-means model selection (for reference)
+                # Model selection plot
                 ax1 = axes[1]
                 ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
                 ax1.set_xlabel("number of clusters (k)")
@@ -371,7 +366,7 @@ def run_pipeline(
                 ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
                 ax2.set_ylabel("silhouette [-1..1]")
                 
-                # Highlight manual k value
+                # Highlight selected k value
                 if best_k in k_vals:
                     k_idx = k_vals.index(best_k)
                     ax1.axvline(x=best_k, color='red', linestyle='--', alpha=0.7, label=f'Manual k={best_k}')
@@ -384,7 +379,7 @@ def run_pipeline(
                 plt.tight_layout()
                 plt.show()
         else:
-            # Just show embedding plot if no max_k available
+            # Simple embedding display
             plt.figure(figsize=(6, 5))
             plt.scatter(embed["X"], embed["Y"], s=10)
             plt.title(f"{embedder} embedding")
@@ -392,7 +387,7 @@ def run_pipeline(
             plt.yticks([])
             plt.show()
     else:
-        # Auto k selection (original logic)
+        # Automatic k selection
         print("Evaluating k for KMeans...")
         k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
         if len(k_vals) == 0:
@@ -406,7 +401,7 @@ def run_pipeline(
             sils.append(silhouette_score(data_for_kmeans, lab))
         inertia_norm = np.asarray(inertias, float) / max(inertias)
 
-        # elbow "angles" (like the class template)
+        # Calculate elbow angles
         angles = [180.0]
         for i in range(1, len(inertia_norm) - 1):
             left  = inertia_norm[i] - inertia_norm[i - 1]
@@ -415,16 +410,16 @@ def run_pipeline(
             angles.append(ang)
             angles.append(180.0)
 
-        # Create 2-column grid for main plots after K-means evaluation
+        # Create visualization grid
         fig, axes = plt.subplots(1, 2, figsize=(12, 5))
         
-        # Plot 1: Embedding
+        # Embedding visualization
         axes[0].scatter(embed["X"], embed["Y"], s=10)
         axes[0].set_title(f"{embedder} embedding")
         axes[0].set_xticks([])
         axes[0].set_yticks([])
         
-        # Plot 2: K-means model selection
+        # Model selection visualization
         ax1 = axes[1]
         ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
         ax1.set_xlabel("number of clusters (k)")
@@ -433,7 +428,7 @@ def run_pipeline(
         ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
         ax2.set_ylabel("silhouette [-1..1]")
 
-        # add tiny labels so it's easier to read
+        # Add value labels for clarity
         for i, s in enumerate(sils):
             is_peak = (i == 0 or s >= sils[i-1]) and (i == len(sils)-1 or s >= sils[i+1])
             if is_peak:
@@ -449,17 +444,17 @@ def run_pipeline(
         plt.tight_layout()
         plt.show()
 
-        # Auto-pick the best k
+        # Select optimal k value
         best_k, why = pick_k_auto(k_vals, inertia_norm, sils, angles)
         print("Auto-picked k:", best_k, "->", why)
 
-    # STEP 10: Final KMeans fit
+    # Final clustering
     km_final = KMeans(n_clusters=best_k, init="k-means++", n_init=20, random_state=42)
     labels_kmeans = pd.Series(km_final.fit_predict(data_for_kmeans), index=data_for_kmeans.index, name="Cluster")
     sil_final = silhouette_score(data_for_kmeans, labels_kmeans)
     print(f"KMeans silhouette at k={best_k}: {sil_final:.3f}")
 
-    # STEP 11: Plot clusters on 2D embedding
+    # Cluster visualization
     plt.figure(figsize=(6, 5))
     for c in sorted(labels_kmeans.unique()):
         pts = embed.loc[labels_kmeans == c]
@@ -470,16 +465,16 @@ def run_pipeline(
     plt.yticks([])
     plt.show()
 
-    # STEP 12: Interpret clusters
+    # Cluster interpretation
     print("KMeans: quick numeric interpretation (top drivers):")
     drivers_km = explain_clusters_numeric(X_scaled, labels_kmeans, top_n=5)
 
-    # STEP 13: Feature distributions
+    # Feature distribution analysis
     print("KMeans: feature distributions by cluster (boxplots)...")
     tmp = X_scaled.copy()
     tmp["Cluster"] = labels_kmeans.values
     
-    # Calculate grid size based on number of features (max 12)
+    # Calculate visualization grid
     n_features = min(len(X_scaled.columns), 12)
     n_cols = 3
     n_rows = (n_features + n_cols - 1) // n_cols  # Ceiling division
@@ -493,7 +488,7 @@ def run_pipeline(
         sns.boxplot(x="Cluster", y=col, data=tmp, ax=axes[row, col_idx])
         axes[row, col_idx].set_title(f"{col} by cluster (KMeans)")
     
-    # Hide empty subplots
+    # Remove unused subplots
     for i in range(n_features, n_rows * n_cols):
         row, col_idx = i // n_cols, i % n_cols
         axes[row, col_idx].set_visible(False)
@@ -501,14 +496,14 @@ def run_pipeline(
     plt.tight_layout()
     plt.show()
 
-   # STEP 14: Optional Sankey diagram
+    # Optional Sankey visualization
     if draw_sankey and HAS_SANKEY and not drivers_km.empty:
         top_feats = (drivers_km.groupby("feature")["z_median"]
                      .apply(lambda s: np.nanmean(np.abs(s)))
                      .sort_values(ascending=False).head(3).index.tolist())
         sankey_top_flows(X_scaled, labels_kmeans, top_feats, bins=3, title="KMeans: top drivers → clusters")
 
-     # STEP 15: Compare with target column
+    # Target comparison analysis
     if target is not None and target in raw.columns:
         print("Comparing target vs clusters...")
         df_k = raw.loc[labels_kmeans.index].copy()
@@ -520,7 +515,7 @@ def run_pipeline(
         plt.title("Target vs KMeans cluster")
         plt.show()
 
-    # STEP 16: Return results
+    # Return analysis results
     return {
         "X_scaled": X_scaled,
         "embedding": embed,
@@ -533,10 +528,16 @@ def run_pipeline(
 
 def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
     """
-    Build short, plain-English summaries of clusters from results['kmeans_drivers'].
-    Each summary highlights the top features that set a cluster apart,
-    showing values in-cluster vs overall. If a binary target is given, 
-    compares its distribution per cluster vs overall.
+    Generate human-readable cluster summaries.
+    
+    Args:
+        results: Clustering results dictionary
+        file_path: Path to original data file
+        target: Target column for comparison
+        top_n: Number of top features to highlight
+    
+    Returns:
+        list: List of cluster summary strings
     """
     import numpy as np
     import pandas as pd
@@ -545,10 +546,10 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
     labels  = results["kmeans_labels"]
     X       = results["X_scaled"]
 
-    # cluster sizes (for the "n=" part)
+    # Calculate cluster sizes
     sizes = labels.value_counts().sort_index()
 
-    # helper to phrase features nicely with numbers
+    # Format feature descriptions
     def humanize_feature(feat, direction, cluster_med, overall_med, is_binary):
         if is_binary and "_" in feat:  # one-hot encoded binary feature
             base, level = feat.rsplit("_", 1)
@@ -562,7 +563,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
             else:
                 return f"lower {feat} values (median {cluster_med:.2f} vs {overall_med:.2f} overall)"
 
-    # Load target (optional) and coerce to binary 0.0/1.0 if possible
+    # Process target variable for comparison
     target_binary = None
     overall_pct_1 = None  # overall % of class 1.0
 
@@ -573,13 +574,13 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
         if target in raw.columns:
             ser = raw[target]
 
-            # Try to coerce to binary numeric 0/1
+            # Convert to binary format
             if pd.api.types.is_numeric_dtype(ser):
                 uniq = pd.unique(ser.dropna())
                 if len(uniq) == 2 and set(np.sort(uniq)) <= {0, 1} | {0.0, 1.0}:
                     target_binary = ser.astype(float)
             else:
-                # Non-numeric but two unique labels -> map to 0.0/1.0 deterministically
+                # Map categorical to binary
                 uniq = pd.unique(ser.dropna())
                 if len(uniq) == 2:
                     u_sorted = np.sort(uniq.astype(str))
@@ -587,15 +588,15 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                     target_binary = ser.astype(str).map(mapping).astype(float)
 
             if target_binary is not None:
-                # compute overall % for 1.0 (use non-null only)
+                # Calculate overall target distribution
                 overall_pct_1 = 100.0 * (target_binary == 1.0).mean()
 
-    # Reconstruct dummies from original CSV (aligned with rows after outlier removal)
+    # Reconstruct original feature information
     if file_path is not None:
         raw = pd.read_csv(file_path)
         raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
         
-        # Get original feature names (before encoding)
+        # Extract original feature names
         original_features = []
         for feat in drivers['feature'].unique():
             if '_' in feat:  # encoded feature
@@ -606,7 +607,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 if feat not in original_features:
                     original_features.append(feat)
         
-        # Reconstruct dummies for binary features
+        # Identify binary features
         binary_features = {}
         for feat in original_features:
             if feat in raw.columns:
@@ -614,7 +615,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 if len(unique_vals) == 2:  # binary feature
                     binary_features[feat] = unique_vals
 
-    # Build the sentences
+    # Generate cluster summaries
     summaries = []
     for cid in sorted(drivers["cluster"].unique()):
         chunk = (drivers[drivers["cluster"] == cid]
@@ -626,18 +627,18 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
             feat = r.feature
             direction = r.direction
             
-            # Check if it's a binary feature
+            # Determine feature type
             is_binary = False
             if '_' in feat:  # encoded feature
                 base, level = feat.rsplit('_', 1)
                 if base in binary_features:
                     is_binary = True
-                    # Calculate percentage from original data
+                    # Calculate actual percentages
                     mask = (labels == cid)
                     cluster_data = raw.loc[mask, base]
                     overall_data = raw[base]
                     
-                    # Calculate percentages
+                    # Compute cluster vs overall percentages
                     cluster_pct = 100.0 * (cluster_data == level).mean()
                     overall_pct = 100.0 * (overall_data == level).mean()
                     
@@ -646,15 +647,15 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                     else:
                         phrases.append(f"{level} {base} is less common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
                 else:
-                    # Use original logic for non-binary encoded features
+                    # Handle non-binary encoded features
                     phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
             else:
-                # Use original logic for non-encoded features
+                # Handle non-encoded features
                 phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
 
         line = f"Cluster {cid} (n={sizes.get(cid, 0)}): " + ", ".join(phrases) + "."
 
-        # Append target info if available
+        # Add target comparison if available
         if target_binary is not None:
             mask = (labels == cid)
             tb_c = target_binary.loc[mask]

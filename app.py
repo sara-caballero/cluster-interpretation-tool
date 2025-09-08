@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 import contextlib
 
 
-# --- ultra-light ping endpoint for uptime monitors ---
+# Health check endpoint for monitoring
 try:
     # Streamlit >= 1.30
     qp = st.query_params
 except Exception:
-    # Fallback para versiones antiguas
+    # Fallback for older versions
     qp = st.experimental_get_query_params()
 
 if (qp.get("ping") == ["1"]) or (qp.get("ping") == "1"):
@@ -19,7 +19,7 @@ if (qp.get("ping") == ["1"]) or (qp.get("ping") == "1"):
     st.stop()
 
 
-# your pipeline + auto_describe live here:
+# Import pipeline functions
 from pipeline import run_pipeline, auto_describe_clusters, preprocess_data
 
 st.set_page_config(page_title="Cluster Interpretation Tool", layout="wide")
@@ -38,7 +38,7 @@ Upload a CSV, preprocess the data, and get:
 """
 )
 
-# ---- helper: route plt.show() into Streamlit ----
+# Context manager to redirect matplotlib plots to Streamlit
 @contextlib.contextmanager
 def streamlit_matplotlib():
     orig_show = plt.show
@@ -54,18 +54,18 @@ def streamlit_matplotlib():
     finally:
         plt.show = orig_show
 
-# ---- Settings and Documentation (Always Visible) ----
+# Application settings and documentation
 st.sidebar.header("⚙️ Settings")
 
-# Initialize variables
+# Global variables initialization
 target = None
 all_cols = []
 
-# ---- Upload CSV ----
+# File upload section
 file = st.file_uploader("Upload a CSV file", type=["csv"])
 
 if file:
-    # persist as a temp path because your pipeline expects a filesystem path
+    # Save uploaded file to temporary location
     with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
         tmp.write(file.read())
         tmp_path = tmp.name
@@ -76,7 +76,7 @@ if file:
         "Column separator",
         ["comma", "semicolon", "tab", "space"],
         index=0,
-        help="Select the character that separates columns in your CSV file"
+        help="Select the character that separates columns in the CSV file"
     )
     
     # Map separator names to actual characters
@@ -88,27 +88,27 @@ if file:
     }
     sep_char = separator_map[separator]
     
-    # quick peek (limits huge files) - now using selected separator
+    # Preview data with selected separator
     df_preview = pd.read_csv(tmp_path, sep=sep_char, nrows=500)
     all_cols = list(df_preview.columns)
     
     with st.expander("🔎 Preview (first 500 rows)"):
         st.dataframe(df_preview)
 
-# Settings that are always available
+# Configuration options
 target = st.sidebar.selectbox("Target column (optional)", [None] + all_cols, index=0)
 
-# Column exclusion settings
+# Feature selection settings
 excluded_cols = st.sidebar.multiselect(
     "Exclude columns from clustering (optional)", 
     all_cols if all_cols else [],
-    help="Select columns you don't want to use as features (e.g., IDs, timestamps)"
+    help="Select columns to exclude from analysis (e.g., IDs, timestamps)"
 )
 
 scaling = st.sidebar.radio("Scaling", ["minmax", "standard", "none"], index=0)
 embedder = st.sidebar.radio("Embedding (for plots)", ["PCA", "UMAP"], index=0)
 cluster_on_features = st.sidebar.checkbox("Cluster on full features (recommended)", value=True)
-# K-means configuration
+# Clustering configuration
 k_selection = st.sidebar.radio("K selection method", ["Auto (silhouette + elbow)", "Manual override"], index=0)
 
 if k_selection == "Auto (silhouette + elbow)":
@@ -121,7 +121,7 @@ else:
 outlier_method = st.sidebar.radio("Outlier removal", ["isoforest", "none"], index=0)
 contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01)
 
-# Documentation section at the bottom of settings
+# Documentation access
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📚 Documentation")
 if st.sidebar.button("📖 User Guide"):
@@ -129,13 +129,13 @@ if st.sidebar.button("📖 User Guide"):
 if st.sidebar.button("🔬 Technical Guide"):
     st.session_state.show_technical_guide_modal = True
 
-# Initialize modal states
+# Modal state management
 if 'show_user_guide_modal' not in st.session_state:
     st.session_state.show_user_guide_modal = False
 if 'show_technical_guide_modal' not in st.session_state:
     st.session_state.show_technical_guide_modal = False
 
-# User Guide Section
+# User guide display
 if st.session_state.show_user_guide_modal:
     st.markdown("---")
     try:
@@ -143,7 +143,7 @@ if st.session_state.show_user_guide_modal:
             user_guide_content = f.read()
         st.markdown(user_guide_content)
     except FileNotFoundError:
-        st.error("User guide file not found. Please ensure docs/USER_GUIDE.md exists.")
+        st.error("User guide file not found. Ensure docs/USER_GUIDE.md exists.")
     except Exception as e:
         st.error(f"Error loading user guide: {str(e)}")
     
@@ -151,7 +151,7 @@ if st.session_state.show_user_guide_modal:
         st.session_state.show_user_guide_modal = False
         st.rerun()
 
-# Technical Guide Section
+# Technical guide display
 if st.session_state.show_technical_guide_modal:
     st.markdown("---")
     try:
@@ -159,7 +159,7 @@ if st.session_state.show_technical_guide_modal:
             technical_guide_content = f.read()
         st.markdown(technical_guide_content)
     except FileNotFoundError:
-        st.error("Technical guide file not found. Please ensure docs/TECHNICAL_GUIDE.md exists.")
+        st.error("Technical guide file not found. Ensure docs/TECHNICAL_GUIDE.md exists.")
     except Exception as e:
         st.error(f"Error loading technical guide: {str(e)}")
     
@@ -167,14 +167,14 @@ if st.session_state.show_technical_guide_modal:
         st.session_state.show_technical_guide_modal = False
         st.rerun()
 
-# Main content area
+# Main application logic
 if file:
-    # Initialize session state for preprocessed data
+    # Session state initialization
     if 'preprocessed_data' not in st.session_state:
         st.session_state.preprocessed_data = None
 
-    # ---- Preprocess Data Button ----
-    # Only show preprocessing button if outlier removal is enabled
+    # Data preprocessing section
+    # Show preprocessing controls when needed
     if outlier_method != "none":
         col1, col2 = st.columns([1, 2])
         
@@ -196,17 +196,17 @@ if file:
             if st.session_state.preprocessed_data is not None:
                 st.success("Data is preprocessed and ready for clustering!")
     else:
-        # Clear any existing preprocessed data when outlier removal is disabled
+        # Clean up preprocessed data when not needed
         if 'preprocessed_data' in st.session_state:
             del st.session_state.preprocessed_data
 
-    # ---- Show Preprocessed Data ----
+    # Display preprocessed data information
     if 'preprocessed_data' in st.session_state and st.session_state.preprocessed_data is not None:
         preprocessed_info = st.session_state.preprocessed_data
         
         st.subheader("Preprocessed Data Summary")
         
-        # Create a nice summary display
+        # Create summary metrics display
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
@@ -221,7 +221,7 @@ if file:
         with col4:
             st.metric("Categorical Features Encoded", preprocessed_info['categorical_encoded'])
         
-        # Show preprocessing details
+        # Display preprocessing configuration
         with st.expander("Preprocessing Details"):
             st.write(f"**Scaling Method:** {preprocessed_info['scaling_method']}")
             st.write(f"**Outlier Method:** {preprocessed_info['outlier_method']}")
@@ -235,14 +235,14 @@ if file:
             })
             st.dataframe(features_df, width='stretch')
         
-        # Show sample of preprocessed data
+        # Display data sample
         with st.expander("Sample of Preprocessed Data (first 10 rows)"):
             sample_data = preprocessed_info['scaled_data'].head(10)
             st.dataframe(sample_data, width='stretch')
         
-        # Show data distribution
+        # Display feature distributions
         with st.expander("Data Distribution"):
-            # Calculate grid size based on number of features (max 10)
+            # Calculate subplot grid dimensions
             n_features = min(len(preprocessed_info['features_used']), 10)
             n_cols = 3
             n_rows = (n_features + n_cols - 1) // n_cols  # Ceiling division
@@ -251,7 +251,7 @@ if file:
             if n_rows == 1:
                 axes = axes.reshape(1, -1)
             
-            # Feature distributions
+            # Plot feature histograms
             sample_features = preprocessed_info['features_used'][:n_features]
             for i, feature in enumerate(sample_features):
                 row, col = i // n_cols, i % n_cols
@@ -260,7 +260,7 @@ if file:
                 axes[row, col].set_xlabel('Value')
                 axes[row, col].set_ylabel('Frequency')
             
-            # Hide empty subplots
+            # Remove unused subplots
             for i in range(n_features, n_rows * n_cols):
                 row, col = i // n_cols, i % n_cols
                 axes[row, col].set_visible(False)
@@ -269,8 +269,8 @@ if file:
             st.pyplot(fig)
             plt.close(fig)
 
-    # ---- Run Clustering Button ----
-    # Show clustering button if we have preprocessed data OR if outlier removal is disabled
+    # Clustering execution section
+    # Determine when to show clustering button
     show_clustering_button = (
         ('preprocessed_data' in st.session_state and st.session_state.preprocessed_data is not None) or
         outlier_method == "none"
@@ -279,9 +279,9 @@ if file:
     if show_clustering_button:
         if st.button("🚀 Run clustering"):
             with st.spinner("Running pipeline…"):
-                # capture all matplotlib figures that your pipeline .show() calls produce
+                # Capture matplotlib output for Streamlit display
                 with streamlit_matplotlib():
-                    # Pass preprocessed_data only if it exists
+                    # Use preprocessed data if available
                     preprocessed_data = None
                     if 'preprocessed_data' in st.session_state:
                         preprocessed_data = st.session_state.preprocessed_data
@@ -303,7 +303,7 @@ if file:
 
             st.success("Done!")
 
-            # ---- Summaries ----
+            # Display cluster summaries
             st.subheader("Cluster summaries")
             summaries = auto_describe_clusters(
                 results,
@@ -314,7 +314,7 @@ if file:
             for s in summaries:
                 st.write("• " + s)
 
-            # ---- Download labels ----
+            # Export cluster assignments
             labels = results["kmeans_labels"].rename("Cluster").to_frame()
             st.download_button(
                 "⬇️ Download cluster assignments (CSV)",
@@ -323,10 +323,10 @@ if file:
                 mime="text/csv",
             )
 
-            # ---- Drivers table ----
+            # Display feature importance table
             with st.expander("Top driver features (table)"):
                 st.dataframe(results["kmeans_drivers"])
     else:
-        st.info("Please preprocess your data first before running clustering.")
+        st.info("Preprocess your data first before running clustering.")
 else:
     st.info("Upload a CSV to get started.")
