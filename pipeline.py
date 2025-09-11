@@ -147,6 +147,7 @@ def preprocess_data(
     outlier_method="isoforest",
     contamination=0.03,
     separator=",",
+    balance_blocks=False,
 ):
     """
     Preprocess data for clustering analysis.
@@ -159,6 +160,7 @@ def preprocess_data(
         outlier_method: Outlier detection method
         contamination: Outlier contamination ratio
         separator: CSV separator character
+        balance_blocks: Whether to balance numerical and categorical blocks
     
     Returns:
         dict: Preprocessing results and metadata
@@ -179,29 +181,116 @@ def preprocess_data(
                 feat_cols.remove(col)
     X = raw[feat_cols].copy()
     
-    # Categorical feature encoding
+    # Separate numerical and categorical features
+    numerical_cols = []
     categorical_cols = []
     for col in X.columns:
-        if X[col].dtype == 'object' or X[col].dtype == 'category':
+        if pd.api.types.is_numeric_dtype(X[col]):
+            numerical_cols.append(col)
+        else:
             categorical_cols.append(col)
     
-    X_encoded = pd.get_dummies(X, drop_first=True, dtype=float)
-    for c in X_encoded.columns:
-        if X_encoded[c].dtype == bool:
-            X_encoded[c] = X_encoded[c].astype(float)
-    
-    # Feature scaling
-    if scaling == "standard":
-        scaler = StandardScaler()
-        X_scaled = pd.DataFrame(scaler.fit_transform(X_encoded), columns=X_encoded.columns, index=X_encoded.index)
-    elif scaling == "minmax":
-        X_scaled = minmax_df(X_encoded).fillna(0.0)
-    elif scaling == "none":
-        X_scaled = X_encoded.astype(float)
+    if balance_blocks:
+        print("Using balanced block preprocessing...")
+        
+        # Process numerical features
+        X_num = X[numerical_cols].copy() if numerical_cols else pd.DataFrame(index=X.index)
+        if not X_num.empty:
+            if scaling == "standard":
+                scaler_num = StandardScaler()
+                X_num_scaled = pd.DataFrame(scaler_num.fit_transform(X_num), columns=X_num.columns, index=X_num.index)
+            elif scaling == "minmax":
+                X_num_scaled = minmax_df(X_num).fillna(0.0)
+            elif scaling == "none":
+                X_num_scaled = X_num.astype(float)
+            else:
+                raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
+        else:
+            X_num_scaled = pd.DataFrame(index=X.index)
+        
+        # Process categorical features
+        X_cat = X[categorical_cols].copy() if categorical_cols else pd.DataFrame(index=X.index)
+        if not X_cat.empty:
+            # One-hot encoding with sqrt(m) normalization
+            X_cat_encoded = pd.get_dummies(X_cat, drop_first=True, dtype=float)
+            for c in X_cat_encoded.columns:
+                if X_cat_encoded[c].dtype == bool:
+                    X_cat_encoded[c] = X_cat_encoded[c].astype(float)
+            
+            # Apply sqrt(m) normalization for each original categorical variable
+            for orig_col in categorical_cols:
+                # Find all dummy columns for this original column
+                dummy_cols = [col for col in X_cat_encoded.columns if col.startswith(orig_col + '_')]
+                if dummy_cols:
+                    m = len(dummy_cols) + 1  # +1 because drop_first=True
+                    sqrt_m = np.sqrt(m)
+                    X_cat_encoded[dummy_cols] = X_cat_encoded[dummy_cols] / sqrt_m
+            
+            # Standardize categorical features
+            scaler_cat = StandardScaler()
+            X_cat_scaled = pd.DataFrame(scaler_cat.fit_transform(X_cat_encoded), 
+                                      columns=X_cat_encoded.columns, index=X_cat_encoded.index)
+        else:
+            X_cat_scaled = pd.DataFrame(index=X.index)
+        
+        # Balance blocks to have comparable total variance (50% each)
+        if not X_num_scaled.empty and not X_cat_scaled.empty:
+            # Calculate total variance for each block
+            V_num = X_num_scaled.var().sum()
+            V_cat = X_cat_scaled.var().sum()
+            
+            # Calculate scaling factors to balance variances
+            if V_num > 0 and V_cat > 0:
+                # Scale so both blocks contribute 50% to total variance
+                total_target_var = 2.0  # 1.0 for each block
+                scale_num = np.sqrt(total_target_var / (2 * V_num))
+                scale_cat = np.sqrt(total_target_var / (2 * V_cat))
+                
+                X_num_scaled = X_num_scaled * scale_num
+                X_cat_scaled = X_cat_scaled * scale_cat
+                
+                block_info = {
+                    "V_num": V_num,
+                    "V_cat": V_cat,
+                    "scale_num": scale_num,
+                    "scale_cat": scale_cat
+                }
+            else:
+                block_info = {"V_num": V_num, "V_cat": V_cat, "scale_num": 1.0, "scale_cat": 1.0}
+        elif not X_num_scaled.empty:
+            block_info = {"V_num": X_num_scaled.var().sum(), "V_cat": 0, "scale_num": 1.0, "scale_cat": 1.0}
+        elif not X_cat_scaled.empty:
+            block_info = {"V_num": 0, "V_cat": X_cat_scaled.var().sum(), "scale_num": 1.0, "scale_cat": 1.0}
+        else:
+            block_info = {"V_num": 0, "V_cat": 0, "scale_num": 1.0, "scale_cat": 1.0}
+        
+        # Combine blocks
+        X_scaled = pd.concat([X_num_scaled, X_cat_scaled], axis=1)
+        
+        print(f"Data shape after prep: {X_scaled.shape} (balanced blocks)")
+        print(f"Block info: V_num={block_info['V_num']:.3f}, V_cat={block_info['V_cat']:.3f}, "
+              f"scale_num={block_info['scale_num']:.3f}, scale_cat={block_info['scale_cat']:.3f}")
+        
     else:
-        raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
-    
-    print("Data shape after prep:", X_scaled.shape)
+        # Original preprocessing (no balancing)
+        X_encoded = pd.get_dummies(X, drop_first=True, dtype=float)
+        for c in X_encoded.columns:
+            if X_encoded[c].dtype == bool:
+                X_encoded[c] = X_encoded[c].astype(float)
+        
+        # Feature scaling
+        if scaling == "standard":
+            scaler = StandardScaler()
+            X_scaled = pd.DataFrame(scaler.fit_transform(X_encoded), columns=X_encoded.columns, index=X_encoded.index)
+        elif scaling == "minmax":
+            X_scaled = minmax_df(X_encoded).fillna(0.0)
+        elif scaling == "none":
+            X_scaled = X_encoded.astype(float)
+        else:
+            raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
+        
+        print("Data shape after prep:", X_scaled.shape)
+        block_info = None
     
     # Outlier removal
     outliers_removed = 0
@@ -233,7 +322,9 @@ def preprocess_data(
         "outliers_removed": outliers_removed,
         "categorical_encoded": len(categorical_cols),
         "raw_data": raw,
-        "scaled_data": X_scaled
+        "scaled_data": X_scaled,
+        "balance_blocks": balance_blocks,
+        "block_info": block_info
     }
     
     return preprocessing_info
@@ -255,6 +346,7 @@ def run_pipeline(
     draw_sankey=False,
     preprocessed_data=None,
     separator=",",
+    balance_blocks=False,
 ):
 
     # Handle preprocessed data or perform preprocessing
@@ -277,24 +369,98 @@ def run_pipeline(
                     feat_cols.remove(col)
         X = raw[feat_cols].copy()
 
-        # Categorical encoding
-        X = pd.get_dummies(X, drop_first=True, dtype=float)
-        for c in X.columns:
-            if X[c].dtype == bool:
-                X[c] = X[c].astype(float)
-
-        # Feature scaling
-        if scaling == "standard":
-            scaler = StandardScaler()
-            X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
-        elif scaling == "minmax":
-            X_scaled = minmax_df(X).fillna(0.0)
-        elif scaling == "none":
-            X_scaled = X.astype(float)
+        # Separate numerical and categorical features
+        numerical_cols = []
+        categorical_cols = []
+        for col in X.columns:
+            if pd.api.types.is_numeric_dtype(X[col]):
+                numerical_cols.append(col)
+            else:
+                categorical_cols.append(col)
+        
+        if balance_blocks:
+            print("Using balanced block preprocessing...")
+            
+            # Process numerical features
+            X_num = X[numerical_cols].copy() if numerical_cols else pd.DataFrame(index=X.index)
+            if not X_num.empty:
+                if scaling == "standard":
+                    scaler_num = StandardScaler()
+                    X_num_scaled = pd.DataFrame(scaler_num.fit_transform(X_num), columns=X_num.columns, index=X_num.index)
+                elif scaling == "minmax":
+                    X_num_scaled = minmax_df(X_num).fillna(0.0)
+                elif scaling == "none":
+                    X_num_scaled = X_num.astype(float)
+                else:
+                    raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
+            else:
+                X_num_scaled = pd.DataFrame(index=X.index)
+            
+            # Process categorical features
+            X_cat = X[categorical_cols].copy() if categorical_cols else pd.DataFrame(index=X.index)
+            if not X_cat.empty:
+                # One-hot encoding with sqrt(m) normalization
+                X_cat_encoded = pd.get_dummies(X_cat, drop_first=True, dtype=float)
+                for c in X_cat_encoded.columns:
+                    if X_cat_encoded[c].dtype == bool:
+                        X_cat_encoded[c] = X_cat_encoded[c].astype(float)
+                
+                # Apply sqrt(m) normalization for each original categorical variable
+                for orig_col in categorical_cols:
+                    # Find all dummy columns for this original column
+                    dummy_cols = [col for col in X_cat_encoded.columns if col.startswith(orig_col + '_')]
+                    if dummy_cols:
+                        m = len(dummy_cols) + 1  # +1 because drop_first=True
+                        sqrt_m = np.sqrt(m)
+                        X_cat_encoded[dummy_cols] = X_cat_encoded[dummy_cols] / sqrt_m
+                
+                # Standardize categorical features
+                scaler_cat = StandardScaler()
+                X_cat_scaled = pd.DataFrame(scaler_cat.fit_transform(X_cat_encoded), 
+                                          columns=X_cat_encoded.columns, index=X_cat_encoded.index)
+            else:
+                X_cat_scaled = pd.DataFrame(index=X.index)
+            
+            # Balance blocks to have comparable total variance (50% each)
+            if not X_num_scaled.empty and not X_cat_scaled.empty:
+                # Calculate total variance for each block
+                V_num = X_num_scaled.var().sum()
+                V_cat = X_cat_scaled.var().sum()
+                
+                # Calculate scaling factors to balance variances
+                if V_num > 0 and V_cat > 0:
+                    # Scale so both blocks contribute 50% to total variance
+                    total_target_var = 2.0  # 1.0 for each block
+                    scale_num = np.sqrt(total_target_var / (2 * V_num))
+                    scale_cat = np.sqrt(total_target_var / (2 * V_cat))
+                    
+                    X_num_scaled = X_num_scaled * scale_num
+                    X_cat_scaled = X_cat_scaled * scale_cat
+            
+            # Combine blocks
+            X_scaled = pd.concat([X_num_scaled, X_cat_scaled], axis=1)
+            
+            print(f"Data shape after prep: {X_scaled.shape} (balanced blocks)")
+            
         else:
-            raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
+            # Original preprocessing (no balancing)
+            X = pd.get_dummies(X, drop_first=True, dtype=float)
+            for c in X.columns:
+                if X[c].dtype == bool:
+                    X[c] = X[c].astype(float)
 
-        print("Data shape after prep:", X_scaled.shape)
+            # Feature scaling
+            if scaling == "standard":
+                scaler = StandardScaler()
+                X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
+            elif scaling == "minmax":
+                X_scaled = minmax_df(X).fillna(0.0)
+            elif scaling == "none":
+                X_scaled = X.astype(float)
+            else:
+                raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
+
+            print("Data shape after prep:", X_scaled.shape)
 
         # Outlier removal
         if outlier_method == "isoforest":
