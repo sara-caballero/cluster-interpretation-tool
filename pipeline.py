@@ -923,7 +923,6 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=5, separa
                 cluster_summary.append(target_info)
         
         summaries.extend(cluster_summary)
-        summaries.append("")  # Add empty line between clusters
 
     # Print formatted summaries
     for s in summaries:
