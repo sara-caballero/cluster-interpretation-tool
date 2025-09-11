@@ -742,7 +742,7 @@ def run_pipeline(
 
 
 
-def auto_describe_clusters(results, file_path=None, target=None, top_n=3, separator=","):
+def auto_describe_clusters(results, file_path=None, target=None, top_n=5, separator=","):
     """
     Generate human-readable cluster summaries.
     
@@ -880,18 +880,26 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3, separa
                  .sort_values("z_median", key=lambda s: s.abs(), ascending=False)
                  .head(top_n))
 
-        phrases = []
+        # Create ordered list of features
+        feature_list = []
         for _, r in chunk.iterrows():
-            phrases.append(humanize_driver(
+            feature_desc = humanize_driver(
                 cid=cid,
                 feat=r.feature,
                 direction=r.direction,
                 cluster_med_scaled=r.cluster_median,
                 overall_med_scaled=r.overall_median
-            ))
+            )
+            feature_list.append(feature_desc)
 
-        line = f"Cluster {cid} (n={sizes.get(cid, 0)}): " + ", ".join(phrases) + "."
-
+        # Format as ordered list
+        cluster_header = f"Cluster {cid} (n={sizes.get(cid, 0)}):"
+        cluster_summary = [cluster_header]
+        
+        # Add numbered list of features
+        for i, feature in enumerate(feature_list, 1):
+            cluster_summary.append(f"  {i}. {feature}")
+        
         # Add target comparison if available
         if target_binary is not None:
             mask = (labels == cid)
@@ -909,11 +917,15 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3, separa
                     pct_over   = 100.0 - overall_pct_1 if overall_pct_1 is not None else None
 
                 if pct_over is not None:
-                    line += f" {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster vs {pct_over:.1f}% overall."
+                    target_info = f"  Target: {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster vs {pct_over:.1f}% overall"
                 else:
-                    line += f" {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster."
-        summaries.append(line)
+                    target_info = f"  Target: {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster"
+                cluster_summary.append(target_info)
+        
+        summaries.extend(cluster_summary)
+        summaries.append("")  # Add empty line between clusters
 
+    # Print formatted summaries
     for s in summaries:
         print(s)
     return summaries
