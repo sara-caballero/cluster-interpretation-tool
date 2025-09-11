@@ -74,8 +74,8 @@ def pick_k_auto(k_values, inertia_norm, silhouettes, angles,
     if sil_best >= silhouette_floor:
         near = np.where(sil >= sil_best - sil_within)[0]
         if len(near) > 0:
-            k = kv[int(near[0])]
-            why = f"silhouette looks ok (best={sil_best:.3f}), picked smallest k within {sil_within} of best"
+        k = kv[int(near[0])]
+        why = f"silhouette looks ok (best={sil_best:.3f}), picked smallest k within {sil_within} of best"
         else:
             k = k_sil
             why = f"silhouette looks ok (best={sil_best:.3f}), but no k within {sil_within}, using best silhouette k"
@@ -86,7 +86,7 @@ def pick_k_auto(k_values, inertia_norm, silhouettes, angles,
         near = np.where(sil >= sil_best - max(sil_within, 0.01))[0]
         if len(near) > 0:
             k = kv[int(near[0])]
-            why = "no clear elbow + low silhouette, chose smallest k near best silhouette"
+        why = "no clear elbow + low silhouette, chose smallest k near best silhouette"
         else:
             k = k_sil
             why = "no clear elbow + low silhouette, using best silhouette k"
@@ -305,23 +305,23 @@ def preprocess_data(
         
     else:
         # Original preprocessing (no balancing)
-        X_encoded = pd.get_dummies(X, drop_first=True, dtype=float)
-        for c in X_encoded.columns:
-            if X_encoded[c].dtype == bool:
-                X_encoded[c] = X_encoded[c].astype(float)
-        
+    X_encoded = pd.get_dummies(X, drop_first=True, dtype=float)
+    for c in X_encoded.columns:
+        if X_encoded[c].dtype == bool:
+            X_encoded[c] = X_encoded[c].astype(float)
+    
         # Feature scaling
-        if scaling == "standard":
-            scaler = StandardScaler()
-            X_scaled = pd.DataFrame(scaler.fit_transform(X_encoded), columns=X_encoded.columns, index=X_encoded.index)
-        elif scaling == "minmax":
-            X_scaled = minmax_df(X_encoded).fillna(0.0)
-        elif scaling == "none":
-            X_scaled = X_encoded.astype(float)
-        else:
-            raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
-        
-        print("Data shape after prep:", X_scaled.shape)
+    if scaling == "standard":
+        scaler = StandardScaler()
+        X_scaled = pd.DataFrame(scaler.fit_transform(X_encoded), columns=X_encoded.columns, index=X_encoded.index)
+    elif scaling == "minmax":
+        X_scaled = minmax_df(X_encoded).fillna(0.0)
+    elif scaling == "none":
+        X_scaled = X_encoded.astype(float)
+    else:
+        raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
+    
+    print("Data shape after prep:", X_scaled.shape)
         block_info = None
     
     # Outlier removal
@@ -493,23 +493,23 @@ def run_pipeline(
             
         else:
             # Original preprocessing (no balancing)
-            X = pd.get_dummies(X, drop_first=True, dtype=float)
-            for c in X.columns:
-                if X[c].dtype == bool:
-                    X[c] = X[c].astype(float)
+        X = pd.get_dummies(X, drop_first=True, dtype=float)
+        for c in X.columns:
+            if X[c].dtype == bool:
+                X[c] = X[c].astype(float)
 
             # Feature scaling
-            if scaling == "standard":
-                scaler = StandardScaler()
-                X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
-            elif scaling == "minmax":
-                X_scaled = minmax_df(X).fillna(0.0)
-            elif scaling == "none":
-                X_scaled = X.astype(float)
-            else:
-                raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
+        if scaling == "standard":
+            scaler = StandardScaler()
+            X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
+        elif scaling == "minmax":
+            X_scaled = minmax_df(X).fillna(0.0)
+        elif scaling == "none":
+            X_scaled = X.astype(float)
+        else:
+            raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
 
-            print("Data shape after prep:", X_scaled.shape)
+        print("Data shape after prep:", X_scaled.shape)
 
         # Outlier removal
         if outlier_method == "isoforest":
@@ -603,65 +603,65 @@ def run_pipeline(
             plt.show()
     else:
         # Automatic k selection
-        print("Evaluating k for KMeans...")
-        k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
-        if len(k_vals) == 0:
-            raise ValueError("Not enough rows to evaluate k (maybe max_k too big?).")
+    print("Evaluating k for KMeans...")
+    k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
+    if len(k_vals) == 0:
+        raise ValueError("Not enough rows to evaluate k (maybe max_k too big?).")
 
-        inertias, sils = [], []
-        for k in k_vals:
-            km  = KMeans(n_clusters=k, init="k-means++", n_init=20, random_state=42)
-            lab = km.fit_predict(data_for_kmeans)
-            inertias.append(km.inertia_)
-            sils.append(silhouette_score(data_for_kmeans, lab))
-        inertia_norm = np.asarray(inertias, float) / max(inertias)
+    inertias, sils = [], []
+    for k in k_vals:
+        km  = KMeans(n_clusters=k, init="k-means++", n_init=20, random_state=42)
+        lab = km.fit_predict(data_for_kmeans)
+        inertias.append(km.inertia_)
+        sils.append(silhouette_score(data_for_kmeans, lab))
+    inertia_norm = np.asarray(inertias, float) / max(inertias)
 
         # Calculate elbow angles
-        angles = [180.0]
-        for i in range(1, len(inertia_norm) - 1):
-            left  = inertia_norm[i] - inertia_norm[i - 1]
-            right = inertia_norm[i + 1] - inertia_norm[i]
-            ang = 180.0 - math.degrees(math.atan((right - left) / (1 + (right * left))))
-            angles.append(ang)
-            angles.append(180.0)
+    angles = [180.0]
+    for i in range(1, len(inertia_norm) - 1):
+        left  = inertia_norm[i] - inertia_norm[i - 1]
+        right = inertia_norm[i + 1] - inertia_norm[i]
+        ang = 180.0 - math.degrees(math.atan((right - left) / (1 + (right * left))))
+        angles.append(ang)
+        angles.append(180.0)
 
         # Create visualization grid
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    
         # Embedding visualization
-        axes[0].scatter(embed["X"], embed["Y"], s=10)
-        axes[0].set_title(f"{embedder} embedding")
-        axes[0].set_xticks([])
-        axes[0].set_yticks([])
-        
+    axes[0].scatter(embed["X"], embed["Y"], s=10)
+    axes[0].set_title(f"{embedder} embedding")
+    axes[0].set_xticks([])
+    axes[0].set_yticks([])
+    
         # Model selection visualization
-        ax1 = axes[1]
-        ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
-        ax1.set_xlabel("number of clusters (k)")
-        ax1.set_ylabel("normalized inertia [0..1]")
-        ax2 = ax1.twinx()
-        ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
-        ax2.set_ylabel("silhouette [-1..1]")
+    ax1 = axes[1]
+    ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
+    ax1.set_xlabel("number of clusters (k)")
+    ax1.set_ylabel("normalized inertia [0..1]")
+    ax2 = ax1.twinx()
+    ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
+    ax2.set_ylabel("silhouette [-1..1]")
 
         # Add value labels for clarity
-        for i, s in enumerate(sils):
-            is_peak = (i == 0 or s >= sils[i-1]) and (i == len(sils)-1 or s >= sils[i+1])
-            if is_peak:
-                ax2.text(k_vals[i], s, f'k={k_vals[i]}\n{s:.2f}', ha="center", va="bottom")
-        for a in range(1, len(angles) - 1):
-            if angles[a-1] >= angles[a] <= angles[a+1] and a < len(k_vals) and a < len(inertia_norm):
-                ax1.text(k_vals[a], float(inertia_norm[a]), f'k={k_vals[a]}\n{angles[a]:.1f}°',
-                         ha="center", va="bottom")
+    for i, s in enumerate(sils):
+        is_peak = (i == 0 or s >= sils[i-1]) and (i == len(sils)-1 or s >= sils[i+1])
+        if is_peak:
+            ax2.text(k_vals[i], s, f'k={k_vals[i]}\n{s:.2f}', ha="center", va="bottom")
+    for a in range(1, len(angles) - 1):
+        if angles[a-1] >= angles[a] <= angles[a+1] and a < len(k_vals) and a < len(inertia_norm):
+            ax1.text(k_vals[a], float(inertia_norm[a]), f'k={k_vals[a]}\n{angles[a]:.1f}°',
+                     ha="center", va="bottom")
 
-        ax1.legend(loc="upper right")
-        ax1.set_title("KMeans model selection")
-        
-        plt.tight_layout()
-        plt.show()
+    ax1.legend(loc="upper right")
+    ax1.set_title("KMeans model selection")
+    
+    plt.tight_layout()
+    plt.show()
 
         # Select optimal k value
-        best_k, why = pick_k_auto(k_vals, inertia_norm, sils, angles)
-        print("Auto-picked k:", best_k, "->", why)
+    best_k, why = pick_k_auto(k_vals, inertia_norm, sils, angles)
+    print("Auto-picked k:", best_k, "->", why)
 
     # Final clustering
     km_final = KMeans(n_clusters=best_k, init="k-means++", n_init=20, random_state=42)
@@ -737,11 +737,12 @@ def run_pipeline(
         "kmeans_labels": labels_kmeans,
         "kmeans_model": km_final,
         "kmeans_drivers": drivers_km,
+        "raw_used": raw,   # <— add this
     }
 
 
 
-def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
+def auto_describe_clusters(results, file_path=None, target=None, top_n=3, separator=","):
     """
     Generate human-readable cluster summaries.
     
@@ -750,6 +751,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
         file_path: Path to original data file
         target: Target column for comparison
         top_n: Number of top features to highlight
+        separator: CSV separator character
     
     Returns:
         list: List of cluster summary strings
@@ -763,6 +765,20 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
 
     # Calculate cluster sizes
     sizes = labels.value_counts().sort_index()
+
+    # NEW: prefer RAW from results; fallback to file if provided
+    raw = None
+    if isinstance(results, dict) and "raw_used" in results and results["raw_used"] is not None:
+        raw = results["raw_used"].copy()
+    elif file_path is not None:
+        raw = pd.read_csv(file_path, sep=separator)
+    # If we got RAW, align to labels index
+    if raw is not None:
+        raw.columns = raw.columns.str.strip()
+        raw = raw.loc[labels.index].copy()
+    
+    # Debug print to verify source
+    print(f"[HUMANIZE] raw source = {'results.raw_used' if 'raw_used' in results else ('file:'+str(file_path))}, cols={0 if raw is None else len(raw.columns)}")
 
     # Format feature descriptions
     def humanize_feature(feat, direction, cluster_med, overall_med, is_binary):
@@ -782,10 +798,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
     target_binary = None
     overall_pct_1 = None  # overall % of class 1.0
 
-    if file_path is not None and target is not None:
-        raw = pd.read_csv(file_path)
-        raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
-
+    if raw is not None and target is not None:
         if target in raw.columns:
             ser = raw[target]
 
@@ -806,11 +819,8 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 # Calculate overall target distribution
                 overall_pct_1 = 100.0 * (target_binary == 1.0).mean()
 
-    # Reconstruct original feature information
-    if file_path is not None:
-        raw = pd.read_csv(file_path)
-        raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
-        
+    # Build binary_raw and categorical_raw FROM raw (if not None)
+    if raw is not None:
         # Detect raw binary 0/1 and original categorical columns
         binary_raw = {c for c in raw.columns
                       if pd.api.types.is_numeric_dtype(raw[c])
@@ -856,6 +866,10 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 return f"{trend} {feat} (median {c_med:.2f} vs {o_med:.2f} overall)"
 
             # Fallback
+            return f"{feat} {('higher' if direction=='higher' else 'lower')} (scaled median {cluster_med_scaled:.2f} vs {overall_med_scaled:.2f})"
+    else:
+        # If raw is None, keep the current scaled fallback
+        def humanize_driver(cid, feat, direction, cluster_med_scaled, overall_med_scaled):
             return f"{feat} {('higher' if direction=='higher' else 'lower')} (scaled median {cluster_med_scaled:.2f} vs {overall_med_scaled:.2f})"
         
 
