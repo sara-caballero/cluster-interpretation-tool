@@ -50,11 +50,18 @@ def pick_k_auto(k_values, inertia_norm, silhouettes, angles,
     sil_best = float(sil[i_sil])
 
     elbow_idx, elbow_angle = None, None
+    # Find elbow point (local minimum in angles)
     for i in range(1, len(ang) - 1):
         if ang[i-1] >= ang[i] <= ang[i+1]:
             if elbow_idx is None or ang[i] < elbow_angle:
                 elbow_idx, elbow_angle = i, float(ang[i])
-    k_elbow = kv[elbow_idx] if elbow_idx is not None else None
+    
+    # Ensure elbow_idx is valid
+    if elbow_idx is not None and 0 <= elbow_idx < len(kv):
+        k_elbow = kv[elbow_idx]
+    else:
+        k_elbow = None
+        elbow_idx = None
 
     elbow_strong, slope_ratio = False, None
     if elbow_idx is not None and 1 <= elbow_idx < len(inert) - 1:
@@ -66,15 +73,23 @@ def pick_k_auto(k_values, inertia_norm, silhouettes, angles,
 
     if sil_best >= silhouette_floor:
         near = np.where(sil >= sil_best - sil_within)[0]
-        k = kv[int(near[0])]
-        why = f"silhouette looks ok (best={sil_best:.3f}), picked smallest k within {sil_within} of best"
-    elif elbow_strong:
+        if len(near) > 0:
+            k = kv[int(near[0])]
+            why = f"silhouette looks ok (best={sil_best:.3f}), picked smallest k within {sil_within} of best"
+        else:
+            k = k_sil
+            why = f"silhouette looks ok (best={sil_best:.3f}), but no k within {sil_within}, using best silhouette k"
+    elif elbow_strong and k_elbow is not None:
         k = k_elbow
         why = f"silhouette weak; elbow at k={k_elbow} (angle={elbow_angle:.1f}°, ratio={slope_ratio:.2f})"
     else:
         near = np.where(sil >= sil_best - max(sil_within, 0.01))[0]
-        k = kv[int(near[0])] if len(near) else k_sil
-        why = "no clear elbow + low silhouette, chose smallest k near best silhouette"
+        if len(near) > 0:
+            k = kv[int(near[0])]
+            why = "no clear elbow + low silhouette, chose smallest k near best silhouette"
+        else:
+            k = k_sil
+            why = "no clear elbow + low silhouette, using best silhouette k"
     return k, {"k_sil": k_sil, "sil_best": sil_best, "k_elbow": k_elbow,
                "elbow_angle": elbow_angle, "elbow_strong": elbow_strong, "slope_ratio": slope_ratio}
 
@@ -191,6 +206,20 @@ def preprocess_data(
             categorical_cols.append(col)
     
     if balance_blocks:
+        # Detect binary numerical columns and move them to categorical
+        bin_num_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c]) and set(pd.unique(X[c].dropna())) <= {0,1}]
+        print(f"Detected {len(bin_num_cols)} binary numerical columns: {bin_num_cols}")
+        
+        # Move binary numerical columns to categorical block
+        X_bin = X[bin_num_cols].astype(float) if bin_num_cols else pd.DataFrame(index=X.index)
+        X_num = X.drop(columns=bin_num_cols, errors="ignore")
+        X_cat_raw = X[categorical_cols].copy() if categorical_cols else pd.DataFrame(index=X.index)
+        if not X_bin.empty:
+            X_cat_raw = pd.concat([X_cat_raw, X_bin], axis=1)
+        
+        # Update column lists
+        numerical_cols = [c for c in numerical_cols if c not in bin_num_cols]
+        categorical_cols = categorical_cols + bin_num_cols
         print("Using balanced block preprocessing...")
         
         # Process numerical features
@@ -209,10 +238,9 @@ def preprocess_data(
             X_num_scaled = pd.DataFrame(index=X.index)
         
         # Process categorical features
-        X_cat = X[categorical_cols].copy() if categorical_cols else pd.DataFrame(index=X.index)
-        if not X_cat.empty:
+        if not X_cat_raw.empty:
             # One-hot encoding with sqrt(m) normalization
-            X_cat_encoded = pd.get_dummies(X_cat, drop_first=True, dtype=float)
+            X_cat_encoded = pd.get_dummies(X_cat_raw, drop_first=True, dtype=float)
             for c in X_cat_encoded.columns:
                 if X_cat_encoded[c].dtype == bool:
                     X_cat_encoded[c] = X_cat_encoded[c].astype(float)
@@ -222,8 +250,12 @@ def preprocess_data(
                 # Find all dummy columns for this original column
                 dummy_cols = [col for col in X_cat_encoded.columns if col.startswith(orig_col + '_')]
                 if dummy_cols:
-                    m = len(dummy_cols) + 1  # +1 because drop_first=True
-                    sqrt_m = np.sqrt(m)
+                    # For binary numerical columns, treat as m=1 (factor=1)
+                    if orig_col in bin_num_cols:
+                        sqrt_m = 1.0  # No normalization for binary numerical
+                    else:
+                        m = len(dummy_cols) + 1  # +1 because drop_first=True
+                        sqrt_m = np.sqrt(m)
                     X_cat_encoded[dummy_cols] = X_cat_encoded[dummy_cols] / sqrt_m
             
             # Standardize categorical features
@@ -379,6 +411,20 @@ def run_pipeline(
                 categorical_cols.append(col)
         
         if balance_blocks:
+            # Detect binary numerical columns and move them to categorical
+            bin_num_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c]) and set(pd.unique(X[c].dropna())) <= {0,1}]
+            print(f"Detected {len(bin_num_cols)} binary numerical columns: {bin_num_cols}")
+            
+            # Move binary numerical columns to categorical block
+            X_bin = X[bin_num_cols].astype(float) if bin_num_cols else pd.DataFrame(index=X.index)
+            X_num = X.drop(columns=bin_num_cols, errors="ignore")
+            X_cat_raw = X[categorical_cols].copy() if categorical_cols else pd.DataFrame(index=X.index)
+            if not X_bin.empty:
+                X_cat_raw = pd.concat([X_cat_raw, X_bin], axis=1)
+            
+            # Update column lists
+            numerical_cols = [c for c in numerical_cols if c not in bin_num_cols]
+            categorical_cols = categorical_cols + bin_num_cols
             print("Using balanced block preprocessing...")
             
             # Process numerical features
@@ -397,10 +443,9 @@ def run_pipeline(
                 X_num_scaled = pd.DataFrame(index=X.index)
             
             # Process categorical features
-            X_cat = X[categorical_cols].copy() if categorical_cols else pd.DataFrame(index=X.index)
-            if not X_cat.empty:
+            if not X_cat_raw.empty:
                 # One-hot encoding with sqrt(m) normalization
-                X_cat_encoded = pd.get_dummies(X_cat, drop_first=True, dtype=float)
+                X_cat_encoded = pd.get_dummies(X_cat_raw, drop_first=True, dtype=float)
                 for c in X_cat_encoded.columns:
                     if X_cat_encoded[c].dtype == bool:
                         X_cat_encoded[c] = X_cat_encoded[c].astype(float)
@@ -410,8 +455,12 @@ def run_pipeline(
                     # Find all dummy columns for this original column
                     dummy_cols = [col for col in X_cat_encoded.columns if col.startswith(orig_col + '_')]
                     if dummy_cols:
-                        m = len(dummy_cols) + 1  # +1 because drop_first=True
-                        sqrt_m = np.sqrt(m)
+                        # For binary numerical columns, treat as m=1 (factor=1)
+                        if orig_col in bin_num_cols:
+                            sqrt_m = 1.0  # No normalization for binary numerical
+                        else:
+                            m = len(dummy_cols) + 1  # +1 because drop_first=True
+                            sqrt_m = np.sqrt(m)
                         X_cat_encoded[dummy_cols] = X_cat_encoded[dummy_cols] / sqrt_m
                 
                 # Standardize categorical features
@@ -773,13 +822,20 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 if feat not in original_features:
                     original_features.append(feat)
         
-        # Identify binary features
+        # Identify binary features (categorical and numerical)
         binary_features = {}
         for feat in original_features:
             if feat in raw.columns:
                 unique_vals = raw[feat].dropna().unique()
                 if len(unique_vals) == 2:  # binary feature
                     binary_features[feat] = unique_vals
+        
+        # Also identify binary numerical columns from raw data
+        for col in raw.columns:
+            if (pd.api.types.is_numeric_dtype(raw[col]) and 
+                col not in binary_features and 
+                set(pd.unique(raw[col].dropna())) <= {0, 1}):
+                binary_features[col] = [0, 1]
 
     # Generate cluster summaries
     summaries = []
@@ -793,12 +849,24 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
             feat = r.feature
             direction = r.direction
             
-            # Determine feature type
-            is_binary = False
-            if '_' in feat:  # encoded feature
+            # Check if it's a binary numerical feature (no underscore, but binary)
+            if feat in binary_features and '_' not in feat:
+                # Binary numerical feature - calculate percentages for value 1
+                mask = (labels == cid)
+                cluster_data = raw.loc[mask, feat]
+                overall_data = raw[feat]
+                
+                # Compute cluster vs overall percentages for value 1
+                cluster_pct = 100.0 * (cluster_data == 1).mean()
+                overall_pct = 100.0 * (overall_data == 1).mean()
+                
+                if direction == "higher":
+                    phrases.append(f"{feat}=1 is more common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
+                else:
+                    phrases.append(f"{feat}=1 is less common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
+            elif '_' in feat:  # encoded feature
                 base, level = feat.rsplit('_', 1)
                 if base in binary_features:
-                    is_binary = True
                     # Calculate actual percentages
                     mask = (labels == cid)
                     cluster_data = raw.loc[mask, base]
@@ -816,7 +884,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                     # Handle non-binary encoded features
                     phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
             else:
-                # Handle non-encoded features
+                # Handle non-encoded, non-binary features
                 phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
 
         line = f"Cluster {cid} (n={sizes.get(cid, 0)}): " + ", ".join(phrases) + "."
