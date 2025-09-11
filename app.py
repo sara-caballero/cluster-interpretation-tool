@@ -120,8 +120,6 @@ else:
 
 outlier_method = st.sidebar.radio("Outlier removal", ["isoforest", "none"], index=0)
 contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01)
-balance_blocks = st.sidebar.checkbox("Balance mixed data", value=False, 
-                                     help="Balance numerical and categorical features to prevent categorical dominance")
 
 # Documentation access
 st.sidebar.markdown("---")
@@ -191,7 +189,6 @@ if file:
                         outlier_method=outlier_method,
                         contamination=contamination,
                         separator=sep_char,
-                        balance_blocks=balance_blocks,
                     )
                     st.session_state.preprocessed_data = preprocessed_info
 
@@ -230,15 +227,6 @@ if file:
             st.write(f"**Outlier Method:** {preprocessed_info['outlier_method']}")
             if preprocessed_info['outlier_method'] == 'isoforest':
                 st.write(f"**Outlier Contamination:** {contamination}")
-            
-            # Show balance blocks information if available
-            if preprocessed_info.get('balance_blocks', False) and preprocessed_info.get('block_info'):
-                block_info = preprocessed_info['block_info']
-                st.write("**Balanced Block Processing:**")
-                st.write(f"- Numerical variance: {block_info['V_num']:.3f}")
-                st.write(f"- Categorical variance: {block_info['V_cat']:.3f}")
-                st.write(f"- Numerical scale factor: {block_info['scale_num']:.3f}")
-                st.write(f"- Categorical scale factor: {block_info['scale_cat']:.3f}")
             
             st.write("**Features Used:**")
             features_df = pd.DataFrame({
@@ -311,7 +299,6 @@ if file:
                         contamination=contamination,
                         preprocessed_data=preprocessed_data,
                         separator=sep_char,
-                        balance_blocks=balance_blocks,
                     )
 
             st.success("Done!")
@@ -322,7 +309,7 @@ if file:
                 results,
                 file_path=tmp_path,
                 target=target,
-                top_n=5
+                top_n=3
             )
             for s in summaries:
                 st.write("• " + s)

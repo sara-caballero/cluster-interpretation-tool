@@ -50,18 +50,11 @@ def pick_k_auto(k_values, inertia_norm, silhouettes, angles,
     sil_best = float(sil[i_sil])
 
     elbow_idx, elbow_angle = None, None
-    # Find elbow point (local minimum in angles)
     for i in range(1, len(ang) - 1):
         if ang[i-1] >= ang[i] <= ang[i+1]:
             if elbow_idx is None or ang[i] < elbow_angle:
                 elbow_idx, elbow_angle = i, float(ang[i])
-    
-    # Ensure elbow_idx is valid
-    if elbow_idx is not None and 0 <= elbow_idx < len(kv):
-        k_elbow = kv[elbow_idx]
-    else:
-        k_elbow = None
-        elbow_idx = None
+    k_elbow = kv[elbow_idx] if elbow_idx is not None else None
 
     elbow_strong, slope_ratio = False, None
     if elbow_idx is not None and 1 <= elbow_idx < len(inert) - 1:
@@ -73,23 +66,15 @@ def pick_k_auto(k_values, inertia_norm, silhouettes, angles,
 
     if sil_best >= silhouette_floor:
         near = np.where(sil >= sil_best - sil_within)[0]
-        if len(near) > 0:
-            k = kv[int(near[0])]
-            why = f"silhouette looks ok (best={sil_best:.3f}), picked smallest k within {sil_within} of best"
-        else:
-            k = k_sil
-            why = f"silhouette looks ok (best={sil_best:.3f}), but no k within {sil_within}, using best silhouette k"
-    elif elbow_strong and k_elbow is not None:
+        k = kv[int(near[0])]
+        why = f"silhouette looks ok (best={sil_best:.3f}), picked smallest k within {sil_within} of best"
+    elif elbow_strong:
         k = k_elbow
         why = f"silhouette weak; elbow at k={k_elbow} (angle={elbow_angle:.1f}°, ratio={slope_ratio:.2f})"
     else:
         near = np.where(sil >= sil_best - max(sil_within, 0.01))[0]
-        if len(near) > 0:
-            k = kv[int(near[0])]
-            why = "no clear elbow + low silhouette, chose smallest k near best silhouette"
-        else:
-            k = k_sil
-            why = "no clear elbow + low silhouette, using best silhouette k"
+        k = kv[int(near[0])] if len(near) else k_sil
+        why = "no clear elbow + low silhouette, chose smallest k near best silhouette"
     return k, {"k_sil": k_sil, "sil_best": sil_best, "k_elbow": k_elbow,
                "elbow_angle": elbow_angle, "elbow_strong": elbow_strong, "slope_ratio": slope_ratio}
 
@@ -162,7 +147,6 @@ def preprocess_data(
     outlier_method="isoforest",
     contamination=0.03,
     separator=",",
-    balance_blocks=False,
 ):
     """
     Preprocess data for clustering analysis.
@@ -175,7 +159,6 @@ def preprocess_data(
         outlier_method: Outlier detection method
         contamination: Outlier contamination ratio
         separator: CSV separator character
-        balance_blocks: Whether to balance numerical and categorical blocks
     
     Returns:
         dict: Preprocessing results and metadata
@@ -196,133 +179,29 @@ def preprocess_data(
                 feat_cols.remove(col)
     X = raw[feat_cols].copy()
     
-    # Separate numerical and categorical features
-    numerical_cols = []
+    # Categorical feature encoding
     categorical_cols = []
     for col in X.columns:
-        if pd.api.types.is_numeric_dtype(X[col]):
-            numerical_cols.append(col)
-        else:
+        if X[col].dtype == 'object' or X[col].dtype == 'category':
             categorical_cols.append(col)
     
-    if balance_blocks:
-        # Detect binary numerical columns and move them to categorical
-        bin_num_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c]) and set(pd.unique(X[c].dropna())) <= {0,1}]
-        print(f"Detected {len(bin_num_cols)} binary numerical columns: {bin_num_cols}")
-        
-        # Move binary numerical columns to categorical block
-        X_bin = X[bin_num_cols].astype(float) if bin_num_cols else pd.DataFrame(index=X.index)
-        X_num = X.drop(columns=bin_num_cols, errors="ignore")
-        X_cat_raw = X[categorical_cols].copy() if categorical_cols else pd.DataFrame(index=X.index)
-        if not X_bin.empty:
-            X_cat_raw = pd.concat([X_cat_raw, X_bin], axis=1)
-        
-        # Update column lists
-        numerical_cols = [c for c in numerical_cols if c not in bin_num_cols]
-        categorical_cols = categorical_cols + bin_num_cols
-        print("Using balanced block preprocessing...")
-        
-        # Process numerical features
-        X_num = X[numerical_cols].copy() if numerical_cols else pd.DataFrame(index=X.index)
-        if not X_num.empty:
-            if scaling == "standard":
-                scaler_num = StandardScaler()
-                X_num_scaled = pd.DataFrame(scaler_num.fit_transform(X_num), columns=X_num.columns, index=X_num.index)
-            elif scaling == "minmax":
-                X_num_scaled = minmax_df(X_num).fillna(0.0)
-            elif scaling == "none":
-                X_num_scaled = X_num.astype(float)
-            else:
-                raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
-        else:
-            X_num_scaled = pd.DataFrame(index=X.index)
-        
-        # Process categorical features
-        if not X_cat_raw.empty:
-            # One-hot encoding with sqrt(m) normalization
-            X_cat_encoded = pd.get_dummies(X_cat_raw, drop_first=True, dtype=float)
-            for c in X_cat_encoded.columns:
-                if X_cat_encoded[c].dtype == bool:
-                    X_cat_encoded[c] = X_cat_encoded[c].astype(float)
-            
-            # Apply sqrt(m) normalization for each original categorical variable
-            for orig_col in categorical_cols:
-                # Find all dummy columns for this original column
-                dummy_cols = [col for col in X_cat_encoded.columns if col.startswith(orig_col + '_')]
-                if dummy_cols:
-                    # For binary numerical columns, treat as m=1 (factor=1)
-                    if orig_col in bin_num_cols:
-                        sqrt_m = 1.0  # No normalization for binary numerical
-                    else:
-                        m = len(dummy_cols) + 1  # +1 because drop_first=True
-                        sqrt_m = np.sqrt(m)
-                    X_cat_encoded[dummy_cols] = X_cat_encoded[dummy_cols] / sqrt_m
-            
-            # Standardize categorical features
-            scaler_cat = StandardScaler()
-            X_cat_scaled = pd.DataFrame(scaler_cat.fit_transform(X_cat_encoded), 
-                                      columns=X_cat_encoded.columns, index=X_cat_encoded.index)
-        else:
-            X_cat_scaled = pd.DataFrame(index=X.index)
-        
-        # Balance blocks to have comparable total variance (50% each)
-        if not X_num_scaled.empty and not X_cat_scaled.empty:
-            # Calculate total variance for each block
-            V_num = X_num_scaled.var().sum()
-            V_cat = X_cat_scaled.var().sum()
-            
-            # Calculate scaling factors to balance variances
-            if V_num > 0 and V_cat > 0:
-                # Scale so both blocks contribute 50% to total variance
-                total_target_var = 2.0  # 1.0 for each block
-                scale_num = np.sqrt(total_target_var / (2 * V_num))
-                scale_cat = np.sqrt(total_target_var / (2 * V_cat))
-                
-                X_num_scaled = X_num_scaled * scale_num
-                X_cat_scaled = X_cat_scaled * scale_cat
-                
-                block_info = {
-                    "V_num": V_num,
-                    "V_cat": V_cat,
-                    "scale_num": scale_num,
-                    "scale_cat": scale_cat
-                }
-            else:
-                block_info = {"V_num": V_num, "V_cat": V_cat, "scale_num": 1.0, "scale_cat": 1.0}
-        elif not X_num_scaled.empty:
-            block_info = {"V_num": X_num_scaled.var().sum(), "V_cat": 0, "scale_num": 1.0, "scale_cat": 1.0}
-        elif not X_cat_scaled.empty:
-            block_info = {"V_num": 0, "V_cat": X_cat_scaled.var().sum(), "scale_num": 1.0, "scale_cat": 1.0}
-        else:
-            block_info = {"V_num": 0, "V_cat": 0, "scale_num": 1.0, "scale_cat": 1.0}
-        
-        # Combine blocks
-        X_scaled = pd.concat([X_num_scaled, X_cat_scaled], axis=1)
-        
-        print(f"Data shape after prep: {X_scaled.shape} (balanced blocks)")
-        print(f"Block info: V_num={block_info['V_num']:.3f}, V_cat={block_info['V_cat']:.3f}, "
-              f"scale_num={block_info['scale_num']:.3f}, scale_cat={block_info['scale_cat']:.3f}")
-        
+    X_encoded = pd.get_dummies(X, drop_first=True, dtype=float)
+    for c in X_encoded.columns:
+        if X_encoded[c].dtype == bool:
+            X_encoded[c] = X_encoded[c].astype(float)
+    
+    # Feature scaling
+    if scaling == "standard":
+        scaler = StandardScaler()
+        X_scaled = pd.DataFrame(scaler.fit_transform(X_encoded), columns=X_encoded.columns, index=X_encoded.index)
+    elif scaling == "minmax":
+        X_scaled = minmax_df(X_encoded).fillna(0.0)
+    elif scaling == "none":
+        X_scaled = X_encoded.astype(float)
     else:
-        # Original preprocessing (no balancing)
-        X_encoded = pd.get_dummies(X, drop_first=True, dtype=float)
-        for c in X_encoded.columns:
-            if X_encoded[c].dtype == bool:
-                X_encoded[c] = X_encoded[c].astype(float)
-        
-        # Feature scaling
-        if scaling == "standard":
-            scaler = StandardScaler()
-            X_scaled = pd.DataFrame(scaler.fit_transform(X_encoded), columns=X_encoded.columns, index=X_encoded.index)
-        elif scaling == "minmax":
-            X_scaled = minmax_df(X_encoded).fillna(0.0)
-        elif scaling == "none":
-            X_scaled = X_encoded.astype(float)
-        else:
-            raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
-        
-        print("Data shape after prep:", X_scaled.shape)
-        block_info = None
+        raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
+    
+    print("Data shape after prep:", X_scaled.shape)
     
     # Outlier removal
     outliers_removed = 0
@@ -354,9 +233,7 @@ def preprocess_data(
         "outliers_removed": outliers_removed,
         "categorical_encoded": len(categorical_cols),
         "raw_data": raw,
-        "scaled_data": X_scaled,
-        "balance_blocks": balance_blocks,
-        "block_info": block_info
+        "scaled_data": X_scaled
     }
     
     return preprocessing_info
@@ -378,7 +255,6 @@ def run_pipeline(
     draw_sankey=False,
     preprocessed_data=None,
     separator=",",
-    balance_blocks=False,
 ):
 
     # Handle preprocessed data or perform preprocessing
@@ -401,115 +277,24 @@ def run_pipeline(
                     feat_cols.remove(col)
         X = raw[feat_cols].copy()
 
-        # Separate numerical and categorical features
-        numerical_cols = []
-        categorical_cols = []
-        for col in X.columns:
-            if pd.api.types.is_numeric_dtype(X[col]):
-                numerical_cols.append(col)
-            else:
-                categorical_cols.append(col)
-        
-        if balance_blocks:
-            # Detect binary numerical columns and move them to categorical
-            bin_num_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c]) and set(pd.unique(X[c].dropna())) <= {0,1}]
-            print(f"Detected {len(bin_num_cols)} binary numerical columns: {bin_num_cols}")
-            
-            # Move binary numerical columns to categorical block
-            X_bin = X[bin_num_cols].astype(float) if bin_num_cols else pd.DataFrame(index=X.index)
-            X_num = X.drop(columns=bin_num_cols, errors="ignore")
-            X_cat_raw = X[categorical_cols].copy() if categorical_cols else pd.DataFrame(index=X.index)
-            if not X_bin.empty:
-                X_cat_raw = pd.concat([X_cat_raw, X_bin], axis=1)
-            
-            # Update column lists
-            numerical_cols = [c for c in numerical_cols if c not in bin_num_cols]
-            categorical_cols = categorical_cols + bin_num_cols
-            print("Using balanced block preprocessing...")
-            
-            # Process numerical features
-            X_num = X[numerical_cols].copy() if numerical_cols else pd.DataFrame(index=X.index)
-            if not X_num.empty:
-                if scaling == "standard":
-                    scaler_num = StandardScaler()
-                    X_num_scaled = pd.DataFrame(scaler_num.fit_transform(X_num), columns=X_num.columns, index=X_num.index)
-                elif scaling == "minmax":
-                    X_num_scaled = minmax_df(X_num).fillna(0.0)
-                elif scaling == "none":
-                    X_num_scaled = X_num.astype(float)
-                else:
-                    raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
-            else:
-                X_num_scaled = pd.DataFrame(index=X.index)
-            
-            # Process categorical features
-            if not X_cat_raw.empty:
-                # One-hot encoding with sqrt(m) normalization
-                X_cat_encoded = pd.get_dummies(X_cat_raw, drop_first=True, dtype=float)
-                for c in X_cat_encoded.columns:
-                    if X_cat_encoded[c].dtype == bool:
-                        X_cat_encoded[c] = X_cat_encoded[c].astype(float)
-                
-                # Apply sqrt(m) normalization for each original categorical variable
-                for orig_col in categorical_cols:
-                    # Find all dummy columns for this original column
-                    dummy_cols = [col for col in X_cat_encoded.columns if col.startswith(orig_col + '_')]
-                    if dummy_cols:
-                        # For binary numerical columns, treat as m=1 (factor=1)
-                        if orig_col in bin_num_cols:
-                            sqrt_m = 1.0  # No normalization for binary numerical
-                        else:
-                            m = len(dummy_cols) + 1  # +1 because drop_first=True
-                            sqrt_m = np.sqrt(m)
-                        X_cat_encoded[dummy_cols] = X_cat_encoded[dummy_cols] / sqrt_m
-                
-                # Standardize categorical features
-                scaler_cat = StandardScaler()
-                X_cat_scaled = pd.DataFrame(scaler_cat.fit_transform(X_cat_encoded), 
-                                          columns=X_cat_encoded.columns, index=X_cat_encoded.index)
-            else:
-                X_cat_scaled = pd.DataFrame(index=X.index)
-            
-            # Balance blocks to have comparable total variance (50% each)
-            if not X_num_scaled.empty and not X_cat_scaled.empty:
-                # Calculate total variance for each block
-                V_num = X_num_scaled.var().sum()
-                V_cat = X_cat_scaled.var().sum()
-                
-                # Calculate scaling factors to balance variances
-                if V_num > 0 and V_cat > 0:
-                    # Scale so both blocks contribute 50% to total variance
-                    total_target_var = 2.0  # 1.0 for each block
-                    scale_num = np.sqrt(total_target_var / (2 * V_num))
-                    scale_cat = np.sqrt(total_target_var / (2 * V_cat))
-                    
-                    X_num_scaled = X_num_scaled * scale_num
-                    X_cat_scaled = X_cat_scaled * scale_cat
-            
-            # Combine blocks
-            X_scaled = pd.concat([X_num_scaled, X_cat_scaled], axis=1)
-            
-            print(f"Data shape after prep: {X_scaled.shape} (balanced blocks)")
-            
+        # Categorical encoding
+        X = pd.get_dummies(X, drop_first=True, dtype=float)
+        for c in X.columns:
+            if X[c].dtype == bool:
+                X[c] = X[c].astype(float)
+
+        # Feature scaling
+        if scaling == "standard":
+            scaler = StandardScaler()
+            X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
+        elif scaling == "minmax":
+            X_scaled = minmax_df(X).fillna(0.0)
+        elif scaling == "none":
+            X_scaled = X.astype(float)
         else:
-            # Original preprocessing (no balancing)
-            X = pd.get_dummies(X, drop_first=True, dtype=float)
-            for c in X.columns:
-                if X[c].dtype == bool:
-                    X[c] = X[c].astype(float)
+            raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
 
-            # Feature scaling
-            if scaling == "standard":
-                scaler = StandardScaler()
-                X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
-            elif scaling == "minmax":
-                X_scaled = minmax_df(X).fillna(0.0)
-            elif scaling == "none":
-                X_scaled = X.astype(float)
-            else:
-                raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
-
-            print("Data shape after prep:", X_scaled.shape)
+        print("Data shape after prep:", X_scaled.shape)
 
         # Outlier removal
         if outlier_method == "isoforest":
@@ -737,12 +522,11 @@ def run_pipeline(
         "kmeans_labels": labels_kmeans,
         "kmeans_model": km_final,
         "kmeans_drivers": drivers_km,
-        "raw_used": raw,   # <— add this
     }
 
 
 
-def auto_describe_clusters(results, file_path=None, target=None, top_n=5, separator=","):
+def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
     """
     Generate human-readable cluster summaries.
     
@@ -751,7 +535,6 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=5, separa
         file_path: Path to original data file
         target: Target column for comparison
         top_n: Number of top features to highlight
-        separator: CSV separator character
     
     Returns:
         list: List of cluster summary strings
@@ -765,20 +548,6 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=5, separa
 
     # Calculate cluster sizes
     sizes = labels.value_counts().sort_index()
-
-    # NEW: prefer RAW from results; fallback to file if provided
-    raw = None
-    if isinstance(results, dict) and "raw_used" in results and results["raw_used"] is not None:
-        raw = results["raw_used"].copy()
-    elif file_path is not None:
-        raw = pd.read_csv(file_path, sep=separator)
-    # If we got RAW, align to labels index
-    if raw is not None:
-        raw.columns = raw.columns.str.strip()
-        raw = raw.loc[labels.index].copy()
-    
-    # Debug print to verify source
-    print(f"[HUMANIZE] raw source = {'results.raw_used' if 'raw_used' in results else ('file:'+str(file_path))}, cols={0 if raw is None else len(raw.columns)}")
 
     # Format feature descriptions
     def humanize_feature(feat, direction, cluster_med, overall_med, is_binary):
@@ -798,7 +567,10 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=5, separa
     target_binary = None
     overall_pct_1 = None  # overall % of class 1.0
 
-    if raw is not None and target is not None:
+    if file_path is not None and target is not None:
+        raw = pd.read_csv(file_path)
+        raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
+
         if target in raw.columns:
             ser = raw[target]
 
@@ -819,59 +591,29 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=5, separa
                 # Calculate overall target distribution
                 overall_pct_1 = 100.0 * (target_binary == 1.0).mean()
 
-    # Build binary_raw and categorical_raw FROM raw (if not None)
-    if raw is not None:
-        # Detect raw binary 0/1 and original categorical columns
-        binary_raw = {c for c in raw.columns
-                      if pd.api.types.is_numeric_dtype(raw[c])
-                      and set(pd.unique(raw[c].dropna())) <= {0, 1, 0.0, 1.0}}
-        categorical_raw = {c for c in raw.columns
-                           if (raw[c].dtype == 'object' or str(raw[c].dtype) == 'category')}
-
-        def pct_level(base, level, mask=None):
-            if base not in raw.columns:
-                return None
-            ser = raw[base].astype(str)
-            if mask is not None:
-                ser = ser.loc[mask]
-            return 100.0 * (ser == str(level)).mean()
-
-        def humanize_driver(cid, feat, direction, cluster_med_scaled, overall_med_scaled):
-            mask = (labels == cid)
-
-            # Case 1: one-hot feature (e.g., ST_Slope_Up) → report % by level using RAW
-            if '_' in feat:
-                base, level = feat.rsplit('_', 1)
-                if base in categorical_raw:
-                    c_pct = pct_level(base, level, mask=mask)
-                    o_pct = pct_level(base, level, mask=None)
-                    if c_pct is not None and o_pct is not None:
-                        more = "more" if c_pct >= o_pct else "less"
-                        return f"{base} = {level} is {more} common ({c_pct:.1f}% vs {o_pct:.1f}% overall)"
-                # Fallback
-                return f"{feat} {('higher' if direction=='higher' else 'lower')} presence (scaled median {cluster_med_scaled:.2f} vs {overall_med_scaled:.2f})"
-
-            # Case 2: raw binary 0/1 (e.g., FastingBS) → report %
-            if feat in binary_raw:
-                c_pct = 100.0 * raw.loc[mask, feat].mean()
-                o_pct = 100.0 * raw[feat].mean()
-                more = "more" if c_pct >= o_pct else "less"
-                return f"{feat}=1 is {more} common ({c_pct:.1f}% vs {o_pct:.1f}% overall)"
-
-            # Case 3: numeric → use RAW median (original units)
-            if feat in raw.columns and pd.api.types.is_numeric_dtype(raw[feat]):
-                c_med = float(raw.loc[mask, feat].median())
-                o_med = float(raw[feat].median())
-                trend = "higher" if c_med >= o_med else "lower"
-                return f"{trend} {feat} (median {c_med:.2f} vs {o_med:.2f} overall)"
-
-            # Fallback
-            return f"{feat} {('higher' if direction=='higher' else 'lower')} (scaled median {cluster_med_scaled:.2f} vs {overall_med_scaled:.2f})"
-    else:
-        # If raw is None, keep the current scaled fallback
-        def humanize_driver(cid, feat, direction, cluster_med_scaled, overall_med_scaled):
-            return f"{feat} {('higher' if direction=='higher' else 'lower')} (scaled median {cluster_med_scaled:.2f} vs {overall_med_scaled:.2f})"
+    # Reconstruct original feature information
+    if file_path is not None:
+        raw = pd.read_csv(file_path)
+        raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
         
+        # Extract original feature names
+        original_features = []
+        for feat in drivers['feature'].unique():
+            if '_' in feat:  # encoded feature
+                base = feat.rsplit('_', 1)[0]
+                if base not in original_features:
+                    original_features.append(base)
+            else:
+                if feat not in original_features:
+                    original_features.append(feat)
+        
+        # Identify binary features
+        binary_features = {}
+        for feat in original_features:
+            if feat in raw.columns:
+                unique_vals = raw[feat].dropna().unique()
+                if len(unique_vals) == 2:  # binary feature
+                    binary_features[feat] = unique_vals
 
     # Generate cluster summaries
     summaries = []
@@ -880,26 +622,39 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=5, separa
                  .sort_values("z_median", key=lambda s: s.abs(), ascending=False)
                  .head(top_n))
 
-        # Create ordered list of features
-        feature_list = []
+        phrases = []
         for _, r in chunk.iterrows():
-            feature_desc = humanize_driver(
-                cid=cid,
-                feat=r.feature,
-                direction=r.direction,
-                cluster_med_scaled=r.cluster_median,
-                overall_med_scaled=r.overall_median
-            )
-            feature_list.append(feature_desc)
+            feat = r.feature
+            direction = r.direction
+            
+            # Determine feature type
+            is_binary = False
+            if '_' in feat:  # encoded feature
+                base, level = feat.rsplit('_', 1)
+                if base in binary_features:
+                    is_binary = True
+                    # Calculate actual percentages
+                    mask = (labels == cid)
+                    cluster_data = raw.loc[mask, base]
+                    overall_data = raw[base]
+                    
+                    # Compute cluster vs overall percentages
+                    cluster_pct = 100.0 * (cluster_data == level).mean()
+                    overall_pct = 100.0 * (overall_data == level).mean()
+                    
+                    if direction == "higher":
+                        phrases.append(f"{level} {base} is more common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
+                    else:
+                        phrases.append(f"{level} {base} is less common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
+                else:
+                    # Handle non-binary encoded features
+                    phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
+            else:
+                # Handle non-encoded features
+                phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
 
-        # Format as ordered list
-        cluster_header = f"Cluster {cid} (n={sizes.get(cid, 0)}):"
-        cluster_summary = [cluster_header]
-        
-        # Add numbered list of features
-        for i, feature in enumerate(feature_list, 1):
-            cluster_summary.append(f"  {i}. {feature}")
-        
+        line = f"Cluster {cid} (n={sizes.get(cid, 0)}): " + ", ".join(phrases) + "."
+
         # Add target comparison if available
         if target_binary is not None:
             mask = (labels == cid)
@@ -917,14 +672,11 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=5, separa
                     pct_over   = 100.0 - overall_pct_1 if overall_pct_1 is not None else None
 
                 if pct_over is not None:
-                    target_info = f"  Target: {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster vs {pct_over:.1f}% overall"
+                    line += f" {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster vs {pct_over:.1f}% overall."
                 else:
-                    target_info = f"  Target: {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster"
-                cluster_summary.append(target_info)
-        
-        summaries.extend(cluster_summary)
+                    line += f" {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster."
+        summaries.append(line)
 
-    # Print formatted summaries
     for s in summaries:
         print(s)
     return summaries
