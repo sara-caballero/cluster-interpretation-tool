@@ -811,31 +811,53 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
         raw = pd.read_csv(file_path)
         raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
         
-        # Extract original feature names
-        original_features = []
-        for feat in drivers['feature'].unique():
-            if '_' in feat:  # encoded feature
-                base = feat.rsplit('_', 1)[0]
-                if base not in original_features:
-                    original_features.append(base)
-            else:
-                if feat not in original_features:
-                    original_features.append(feat)
+        # Detect raw binary 0/1 and original categorical columns
+        binary_raw = {c for c in raw.columns
+                      if pd.api.types.is_numeric_dtype(raw[c])
+                      and set(pd.unique(raw[c].dropna())) <= {0, 1, 0.0, 1.0}}
+        categorical_raw = {c for c in raw.columns
+                           if (raw[c].dtype == 'object' or str(raw[c].dtype) == 'category')}
+
+        def pct_level(base, level, mask=None):
+            if base not in raw.columns:
+                return None
+            ser = raw[base].astype(str)
+            if mask is not None:
+                ser = ser.loc[mask]
+            return 100.0 * (ser == str(level)).mean()
+
+        def humanize_driver(cid, feat, direction, cluster_med_scaled, overall_med_scaled):
+            mask = (labels == cid)
+
+            # Case 1: one-hot feature (e.g., ST_Slope_Up) → report % by level using RAW
+            if '_' in feat:
+                base, level = feat.rsplit('_', 1)
+                if base in categorical_raw:
+                    c_pct = pct_level(base, level, mask=mask)
+                    o_pct = pct_level(base, level, mask=None)
+                    if c_pct is not None and o_pct is not None:
+                        more = "more" if c_pct >= o_pct else "less"
+                        return f"{base} = {level} is {more} common ({c_pct:.1f}% vs {o_pct:.1f}% overall)"
+                # Fallback
+                return f"{feat} {('higher' if direction=='higher' else 'lower')} presence (scaled median {cluster_med_scaled:.2f} vs {overall_med_scaled:.2f})"
+
+            # Case 2: raw binary 0/1 (e.g., FastingBS) → report %
+            if feat in binary_raw:
+                c_pct = 100.0 * raw.loc[mask, feat].mean()
+                o_pct = 100.0 * raw[feat].mean()
+                more = "more" if c_pct >= o_pct else "less"
+                return f"{feat}=1 is {more} common ({c_pct:.1f}% vs {o_pct:.1f}% overall)"
+
+            # Case 3: numeric → use RAW median (original units)
+            if feat in raw.columns and pd.api.types.is_numeric_dtype(raw[feat]):
+                c_med = float(raw.loc[mask, feat].median())
+                o_med = float(raw[feat].median())
+                trend = "higher" if c_med >= o_med else "lower"
+                return f"{trend} {feat} (median {c_med:.2f} vs {o_med:.2f} overall)"
+
+            # Fallback
+            return f"{feat} {('higher' if direction=='higher' else 'lower')} (scaled median {cluster_med_scaled:.2f} vs {overall_med_scaled:.2f})"
         
-        # Identify binary features (categorical and numerical)
-        binary_features = {}
-        for feat in original_features:
-            if feat in raw.columns:
-                unique_vals = raw[feat].dropna().unique()
-                if len(unique_vals) == 2:  # binary feature
-                    binary_features[feat] = unique_vals
-        
-        # Also identify binary numerical columns from raw data
-        for col in raw.columns:
-            if (pd.api.types.is_numeric_dtype(raw[col]) and 
-                col not in binary_features and 
-                set(pd.unique(raw[col].dropna())) <= {0, 1}):
-                binary_features[col] = [0, 1]
 
     # Generate cluster summaries
     summaries = []
@@ -846,46 +868,13 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
 
         phrases = []
         for _, r in chunk.iterrows():
-            feat = r.feature
-            direction = r.direction
-            
-            # Check if it's a binary numerical feature (no underscore, but binary)
-            if feat in binary_features and '_' not in feat:
-                # Binary numerical feature - calculate percentages for value 1
-                mask = (labels == cid)
-                cluster_data = raw.loc[mask, feat]
-                overall_data = raw[feat]
-                
-                # Compute cluster vs overall percentages for value 1
-                cluster_pct = 100.0 * (cluster_data == 1).mean()
-                overall_pct = 100.0 * (overall_data == 1).mean()
-                
-                if direction == "higher":
-                    phrases.append(f"{feat}=1 is more common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
-                else:
-                    phrases.append(f"{feat}=1 is less common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
-            elif '_' in feat:  # encoded feature
-                base, level = feat.rsplit('_', 1)
-                if base in binary_features:
-                    # Calculate actual percentages
-                    mask = (labels == cid)
-                    cluster_data = raw.loc[mask, base]
-                    overall_data = raw[base]
-                    
-                    # Compute cluster vs overall percentages
-                    cluster_pct = 100.0 * (cluster_data == level).mean()
-                    overall_pct = 100.0 * (overall_data == level).mean()
-                    
-                    if direction == "higher":
-                        phrases.append(f"{level} {base} is more common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
-                    else:
-                        phrases.append(f"{level} {base} is less common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
-                else:
-                    # Handle non-binary encoded features
-                    phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
-            else:
-                # Handle non-encoded, non-binary features
-                phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
+            phrases.append(humanize_driver(
+                cid=cid,
+                feat=r.feature,
+                direction=r.direction,
+                cluster_med_scaled=r.cluster_median,
+                overall_med_scaled=r.overall_median
+            ))
 
         line = f"Cluster {cid} (n={sizes.get(cid, 0)}): " + ", ".join(phrases) + "."
 
