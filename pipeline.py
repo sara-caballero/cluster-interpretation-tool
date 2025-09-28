@@ -699,7 +699,8 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
 
 def generate_clustering_pdf(results, file_path=None, target=None, top_n=3, 
                            scaling="minmax", embedder="PCA", manual_k=None, 
-                           max_k=None, outlier_method="none", contamination=0.03):
+                           max_k=None, outlier_method="none", contamination=0.03,
+                           preprocessed_data=None):
     """
     Generate a comprehensive PDF report of clustering results.
     
@@ -849,12 +850,55 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
     
     story.append(Spacer(1, 20))
     
-    # Add note about visualizations
+    # Add preprocessing information if available
+    if preprocessed_data is not None:
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("Data Preprocessing Summary", heading_style))
+        
+        prep_data = [
+            ['Original data shape:', f"{preprocessed_data['original_shape'][0]} × {preprocessed_data['original_shape'][1]}"],
+            ['Final data shape:', f"{preprocessed_data['final_shape'][0]} × {preprocessed_data['final_shape'][1]}"],
+            ['Outliers removed:', str(preprocessed_data['outliers_removed'])],
+            ['Categorical features encoded:', str(preprocessed_data['categorical_encoded'])],
+            ['Scaling method:', preprocessed_data['scaling_method']],
+            ['Outlier method:', preprocessed_data['outlier_method']],
+        ]
+        
+        prep_table = Table(prep_data, colWidths=[2*inch, 2*inch])
+        prep_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('BACKGROUND', (1, 0), (1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(prep_table)
+    
+    # Add visualization information
+    story.append(Spacer(1, 20))
+    story.append(Paragraph("Visualizations Generated", heading_style))
+    
+    viz_info = [
+        "• 2D Embedding Plot: Shows data structure in reduced dimensions",
+        "• Model Selection Plot: Displays inertia and silhouette scores for different k values",
+        "• Final Clustering Plot: Shows cluster assignments on 2D embedding",
+        "• Feature Distribution Plots: Box plots showing feature distributions by cluster"
+    ]
+    
+    for info in viz_info:
+        story.append(Paragraph(info, normal_style))
+        story.append(Spacer(1, 6))
+    
+    # Add note about interactive visualizations
+    story.append(Spacer(1, 20))
     story.append(Paragraph("Note", heading_style))
     story.append(Paragraph(
-        "This report contains the numerical results of the clustering analysis. "
-        "For visualizations (2D embeddings, model selection plots, feature distributions), "
-        "please refer to the interactive plots displayed in the application interface.",
+        "This report contains the numerical results and summary of the clustering analysis. "
+        "The interactive visualizations (2D embeddings, model selection plots, feature distributions) "
+        "are displayed in the application interface and provide detailed insights into the clustering results.",
         normal_style
     ))
     

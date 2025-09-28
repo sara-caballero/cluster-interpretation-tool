@@ -329,7 +329,8 @@ if file:
                     manual_k=manual_k,
                     max_k=max_k,
                     outlier_method=outlier_method,
-                    contamination=contamination
+                    contamination=contamination,
+                    preprocessed_data=preprocessed_data
                 )
                 
                 st.download_button(
