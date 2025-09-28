@@ -717,67 +717,68 @@ def run_pipeline(
             plt.xticks([])
             plt.yticks([])
             plt.show()
+
     else:
         # Automatic k selection
-    print("Evaluating k for KMeans...")
-    k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
-    if len(k_vals) == 0:
-        raise ValueError("Not enough rows to evaluate k (maybe max_k too big?).")
+        print("Evaluating k for KMeans...")
+        k_vals = list(range(2, min(max_k, len(data_for_kmeans) - 1) + 1))
+        if len(k_vals) == 0:
+            raise ValueError("Not enough rows to evaluate k (maybe max_k too big?).")
 
-    inertias, sils = [], []
-    for k in k_vals:
-        km  = KMeans(n_clusters=k, init="k-means++", n_init=20, random_state=42)
-        lab = km.fit_predict(data_for_kmeans)
-        inertias.append(km.inertia_)
-        sils.append(silhouette_score(data_for_kmeans, lab))
-    inertia_norm = np.asarray(inertias, float) / max(inertias)
+        inertias, sils = [], []
+        for k in k_vals:
+            km  = KMeans(n_clusters=k, init="k-means++", n_init=20, random_state=42)
+            lab = km.fit_predict(data_for_kmeans)
+            inertias.append(km.inertia_)
+            sils.append(silhouette_score(data_for_kmeans, lab))
+        inertia_norm = np.asarray(inertias, float) / max(inertias)
 
         # Calculate elbow angles
-    angles = [180.0]
-    for i in range(1, len(inertia_norm) - 1):
-        left  = inertia_norm[i] - inertia_norm[i - 1]
-        right = inertia_norm[i + 1] - inertia_norm[i]
-        ang = 180.0 - math.degrees(math.atan((right - left) / (1 + (right * left))))
-        angles.append(ang)
+        angles = [180.0]
+        for i in range(1, len(inertia_norm) - 1):
+            left  = inertia_norm[i] - inertia_norm[i - 1]
+            right = inertia_norm[i + 1] - inertia_norm[i]
+            ang = 180.0 - math.degrees(math.atan((right - left) / (1 + (right * left))))
+            angles.append(ang)
+            
         angles.append(180.0)
 
         # Create visualization grid
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    
+        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
         # Embedding visualization
-    axes[0].scatter(embed["X"], embed["Y"], s=10)
-    axes[0].set_title(f"{embedder} embedding")
-    axes[0].set_xticks([])
-    axes[0].set_yticks([])
-    
+        axes[0].scatter(embed["X"], embed["Y"], s=10)
+        axes[0].set_title(f"{embedder} embedding")
+        axes[0].set_xticks([]); axes[0].set_yticks([])
+
         # Model selection visualization
-    ax1 = axes[1]
-    ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
-    ax1.set_xlabel("number of clusters (k)")
-    ax1.set_ylabel("normalized inertia [0..1]")
-    ax2 = ax1.twinx()
-    ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
-    ax2.set_ylabel("silhouette [-1..1]")
+        ax1 = axes[1]
+        ax1.plot(k_vals, inertia_norm, marker="o", label="normalized inertia (elbow)")
+        ax1.set_xlabel("number of clusters (k)")
+        ax1.set_ylabel("normalized inertia [0..1]")
+        ax2 = ax1.twinx()
+        ax2.plot(k_vals, sils, marker="X", linestyle="--", label="average silhouette score")
+        ax2.set_ylabel("silhouette [-1..1]")
 
         # Add value labels for clarity
-    for i, s in enumerate(sils):
-        is_peak = (i == 0 or s >= sils[i-1]) and (i == len(sils)-1 or s >= sils[i+1])
-        if is_peak:
-            ax2.text(k_vals[i], s, f'k={k_vals[i]}\n{s:.2f}', ha="center", va="bottom")
-    for a in range(1, len(angles) - 1):
-        if angles[a-1] >= angles[a] <= angles[a+1] and a < len(k_vals) and a < len(inertia_norm):
-            ax1.text(k_vals[a], float(inertia_norm[a]), f'k={k_vals[a]}\n{angles[a]:.1f}°',
-                     ha="center", va="bottom")
+        for i, s in enumerate(sils):
+            is_peak = (i == 0 or s >= sils[i-1]) and (i == len(sils)-1 or s >= sils[i+1])
+            if is_peak:
+                ax2.text(k_vals[i], s, f'k={k_vals[i]}\n{s:.2f}', ha="center", va="bottom")
 
-    ax1.legend(loc="upper right")
-    ax1.set_title("KMeans model selection")
-    
-    plt.tight_layout()
-    plt.show()
+        for a in range(1, len(angles) - 1):
+            if angles[a-1] >= angles[a] <= angles[a+1] and a < len(k_vals) and a < len(inertia_norm):
+                ax1.text(k_vals[a], float(inertia_norm[a]), f'k={k_vals[a]}\n{angles[a]:.1f}°',
+                         ha="center", va="bottom")
+
+        ax1.legend(loc="upper right")
+        ax1.set_title("KMeans model selection")
+        plt.tight_layout(); plt.show()
 
         # Select optimal k value
-    best_k, why = pick_k_auto(k_vals, inertia_norm, sils, angles)
-    print("Auto-picked k:", best_k, "->", why)
+        best_k, why = pick_k_auto(k_vals, inertia_norm, sils, angles)
+        print("Auto-picked k:", best_k, "->", why)
+
 
     # Final clustering
     km_final = KMeans(n_clusters=best_k, init="k-means++", n_init=20, random_state=42)
@@ -901,7 +902,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
         drivers = results["kmeans_drivers_orig"].copy()
         use_original_units = True
     else:
-    drivers = results["kmeans_drivers"].copy()
+        drivers = results["kmeans_drivers"].copy()
         use_original_units = False
 
     labels = results["kmeans_labels"]
@@ -1016,19 +1017,15 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                     if diff_target < 5:
                         target_desc = "similar frequency"
                     elif diff_target < 15:
-                        if pct_here > pct_over:
-                            target_desc = "slightly more frequent"
-                else:
-                            target_desc = "slightly less frequent"
+                        target_desc = "slightly more frequent" if pct_here > pct_over else "slightly less frequent"
                     else:
-                        if pct_here > pct_over:
-                            target_desc = "much more frequent"
-                        else:
-                            target_desc = "much less frequent"
-                    
+                        target_desc = "much more frequent" if pct_here > pct_over else "much less frequent"
+
                     line += f" → {target}=1 in {pct_here:.0f}% vs {pct_over:.0f}% ({target_desc})"
                 else:
                     line += f" → {target}=1 in {pct_here:.0f}%"
+
+
         summaries.append(line)
 
     for s in summaries:
