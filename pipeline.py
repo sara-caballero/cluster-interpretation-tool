@@ -206,13 +206,36 @@ def preprocess_data(
             X_encoded[c] = X_encoded[c].astype(float)
     
     # Feature scaling
+    scaler_info = {"method": scaling, "per_feature": {}}
+    
     if scaling == "standard":
         scaler = StandardScaler()
         X_scaled = pd.DataFrame(scaler.fit_transform(X_encoded), columns=X_encoded.columns, index=X_encoded.index)
+        # Guardar parámetros de escalado estándar
+        for i, col in enumerate(X_encoded.columns):
+            scaler_info["per_feature"][col] = {
+                "mean": scaler.mean_[i],
+                "std": scaler.scale_[i]
+            }
     elif scaling == "minmax":
         X_scaled = minmax_df(X_encoded).fillna(0.0)
+        # Guardar parámetros de escalado minmax
+        for col in X_encoded.columns:
+            min_val = X_encoded[col].min()
+            max_val = X_encoded[col].max()
+            range_val = max_val - min_val
+            scaler_info["per_feature"][col] = {
+                "min": min_val,
+                "range": range_val
+            }
     elif scaling == "none":
         X_scaled = X_encoded.astype(float)
+        # Para "none", no hay transformación
+        for col in X_encoded.columns:
+            scaler_info["per_feature"][col] = {
+                "min": 0,
+                "range": 1
+            }
     else:
         raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
     
@@ -248,10 +271,159 @@ def preprocess_data(
         "outliers_removed": outliers_removed,
         "categorical_encoded": len(categorical_cols),
         "raw_data": raw,
-        "scaled_data": X_scaled
+        "scaled_data": X_scaled,
+        "scaler_info": scaler_info
     }
     
     return preprocessing_info
+
+
+# Utility functions for human-readable interpretations
+
+def inverse_scale(series_or_scalar, scaler_info, feature_name=None):
+    """
+    Convierte valores escalados de vuelta a unidades originales.
+    
+    Args:
+        series_or_scalar: Serie de pandas o valor escalar
+        scaler_info: Diccionario con información del escalado
+        feature_name: Nombre de la característica (requerido si series_or_scalar es escalar)
+    
+    Returns:
+        Valores en unidades originales
+    """
+    if scaler_info["method"] == "none":
+        return series_or_scalar
+    
+    if isinstance(series_or_scalar, (int, float)):
+        # Valor escalar
+        if feature_name is None:
+            raise ValueError("feature_name es requerido para valores escalares")
+        
+        if feature_name not in scaler_info["per_feature"]:
+            return series_or_scalar
+        
+        params = scaler_info["per_feature"][feature_name]
+        
+        if scaler_info["method"] == "standard":
+            # x_original = x_scaled * std + mean
+            return series_or_scalar * params["std"] + params["mean"]
+        elif scaler_info["method"] == "minmax":
+            # x_original = x_scaled * range + min
+            return series_or_scalar * params["range"] + params["min"]
+    else:
+        # Serie de pandas
+        result = series_or_scalar.copy()
+        for col in series_or_scalar.columns:
+            if col in scaler_info["per_feature"]:
+                params = scaler_info["per_feature"][col]
+                
+                if scaler_info["method"] == "standard":
+                    result[col] = series_or_scalar[col] * params["std"] + params["mean"]
+                elif scaler_info["method"] == "minmax":
+                    result[col] = series_or_scalar[col] * params["range"] + params["min"]
+        
+        return result
+
+def prettify(name):
+    """
+    Convierte nombres de características a formato legible.
+    """
+    return name.replace("_", " ").title()
+
+def percent_diff_text(a, b):
+    """
+    Genera texto de diferencia porcentual.
+    """
+    if b == 0:
+        return ""
+    
+    rel_diff = (a - b) / abs(b)
+    percent = abs(rel_diff) * 100
+    
+    if rel_diff > 0:
+        return f"({percent:.0f}% más que la media)"
+    else:
+        return f"({percent:.0f}% menos que la media)"
+
+def explain_clusters_numeric_original(raw_df, X_scaled, labels, scaler_info, top_n=5):
+    """
+    Calcula las características más importantes de cada cluster en unidades originales.
+    
+    Args:
+        raw_df: DataFrame con datos originales (sin escalar)
+        X_scaled: DataFrame con datos escalados
+        labels: Etiquetas de cluster
+        scaler_info: Información del escalado
+        top_n: Número de características principales por cluster
+    
+    Returns:
+        DataFrame con características importantes en unidades originales
+    """
+    import numpy as np
+    import pandas as pd
+    
+    results = []
+    
+    for cluster_id in sorted(labels.unique()):
+        # Máscara para el cluster actual
+        mask = labels == cluster_id
+        cluster_data = X_scaled[mask]
+        
+        # Calcular medianas del cluster y globales
+        cluster_medians = cluster_data.median()
+        overall_medians = X_scaled.median()
+        
+        # Convertir a unidades originales
+        cluster_medians_orig = inverse_scale(cluster_medians, scaler_info)
+        overall_medians_orig = inverse_scale(overall_medians, scaler_info)
+        
+        # Calcular diferencias y z-scores
+        differences = cluster_medians_orig - overall_medians_orig
+        
+        # Para cada característica
+        for feature in X_scaled.columns:
+            cluster_med = cluster_medians_orig[feature]
+            overall_med = overall_medians_orig[feature]
+            diff = differences[feature]
+            
+            # Determinar dirección
+            direction = "higher" if diff > 0 else "lower"
+            
+            # Calcular z-score aproximado (usando desviación estándar de los datos originales)
+            if feature in raw_df.columns:
+                feature_std = raw_df[feature].std()
+                if feature_std > 0:
+                    z_score = diff / feature_std
+                else:
+                    z_score = 0
+            else:
+                z_score = 0
+            
+            results.append({
+                'cluster': cluster_id,
+                'feature': feature,
+                'direction': direction,
+                'cluster_median_orig': cluster_med,
+                'overall_median_orig': overall_med,
+                'z_score': z_score
+            })
+    
+    # Convertir a DataFrame y ordenar por z-score absoluto
+    results_df = pd.DataFrame(results)
+    results_df['abs_z_score'] = results_df['z_score'].abs()
+    
+    # Seleccionar top_n características por cluster
+    top_features = []
+    for cluster_id in sorted(labels.unique()):
+        cluster_results = results_df[results_df['cluster'] == cluster_id]
+        top_cluster = cluster_results.nlargest(top_n, 'abs_z_score')
+        top_features.append(top_cluster)
+    
+    if top_features:
+        return pd.concat(top_features, ignore_index=True)
+    else:
+        return pd.DataFrame()
 
 
 # Main clustering pipeline
@@ -483,6 +655,14 @@ def run_pipeline(
     # Cluster interpretation
     print("KMeans: quick numeric interpretation (top drivers):")
     drivers_km = explain_clusters_numeric(X_scaled, labels_kmeans, top_n=5)
+    
+    # Calculate drivers in original units if scaler info is available
+    drivers_km_orig = None
+    if preprocessed_data is not None and "scaler_info" in preprocessed_data:
+        print("Calculating drivers in original units...")
+        drivers_km_orig = explain_clusters_numeric_original(
+            raw, X_scaled, labels_kmeans, preprocessed_data["scaler_info"], top_n=5
+        )
 
     # Feature distribution analysis
     print("KMeans: feature distributions by cluster (boxplots)...")
@@ -531,7 +711,7 @@ def run_pipeline(
         plt.show()
 
     # Return analysis results
-    return {
+    results_dict = {
         "X_scaled": X_scaled,
         "embedding": embed,
         "kmeans_labels": labels_kmeans,
@@ -539,6 +719,12 @@ def run_pipeline(
         "kmeans_drivers": drivers_km,
         "raw_data": raw,  # Include raw data for PDF generation
     }
+    
+    # Add original units drivers if available
+    if drivers_km_orig is not None:
+        results_dict["kmeans_drivers_orig"] = drivers_km_orig
+    
+    return results_dict
 
 
 
@@ -558,26 +744,19 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
     import numpy as np
     import pandas as pd
 
-    drivers = results["kmeans_drivers"].copy()
-    labels  = results["kmeans_labels"]
-    X       = results["X_scaled"]
+    # Usar drivers en unidades originales si están disponibles
+    if "kmeans_drivers_orig" in results and not results["kmeans_drivers_orig"].empty:
+        drivers = results["kmeans_drivers_orig"].copy()
+        use_original_units = True
+    else:
+        drivers = results["kmeans_drivers"].copy()
+        use_original_units = False
+    
+    labels = results["kmeans_labels"]
+    X = results["X_scaled"]
 
-    # Calculate cluster sizes
+    # Calcular tamaños de clusters
     sizes = labels.value_counts().sort_index()
-
-    # Format feature descriptions
-    def humanize_feature(feat, direction, cluster_med, overall_med, is_binary):
-        if is_binary and "_" in feat:  # one-hot encoded binary feature
-            base, level = feat.rsplit("_", 1)
-            if direction == "higher":
-                return f"{level} {base} is more common ({cluster_med*100:.1f}% vs {overall_med*100:.1f}% overall)"
-            else:
-                return f"{level} {base} is less common ({cluster_med*100:.1f}% vs {overall_med*100:.1f}% overall)"
-        else:  # numeric feature
-            if direction == "higher":
-                return f"higher {feat} values (median {cluster_med:.2f} vs {overall_med:.2f} overall)"
-            else:
-                return f"lower {feat} values (median {cluster_med:.2f} vs {overall_med:.2f} overall)"
 
     # Process target variable for comparison
     target_binary = None
@@ -607,35 +786,26 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 # Calculate overall target distribution
                 overall_pct_1 = 100.0 * (target_binary == 1.0).mean()
 
-    # Reconstruct original feature information
+    # Reconstruir información de características originales
+    raw = None
+    binary_features = {}
+    
     if file_path is not None:
         raw = pd.read_csv(file_path)
-        raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
+        raw = raw.loc[labels.index].copy()
         
-        # Extract original feature names
-        original_features = []
-        for feat in drivers['feature'].unique():
-            if '_' in feat:  # encoded feature
-                base = feat.rsplit('_', 1)[0]
-                if base not in original_features:
-                    original_features.append(base)
-            else:
-                if feat not in original_features:
-                    original_features.append(feat)
-        
-        # Identify binary features
-        binary_features = {}
-        for feat in original_features:
-            if feat in raw.columns:
-                unique_vals = raw[feat].dropna().unique()
-                if len(unique_vals) == 2:  # binary feature
-                    binary_features[feat] = unique_vals
+        # Identificar características binarias
+        for feat in raw.columns:
+            unique_vals = raw[feat].dropna().unique()
+            if len(unique_vals) == 2:  # característica binaria
+                binary_features[feat] = unique_vals
 
-    # Generate cluster summaries
+    # Generar resúmenes de clusters
     summaries = []
     for cid in sorted(drivers["cluster"].unique()):
+        sort_col = "z_score" if use_original_units else "z_median"
         chunk = (drivers[drivers["cluster"] == cid]
-                 .sort_values("z_median", key=lambda s: s.abs(), ascending=False)
+                 .sort_values(sort_col, key=lambda s: s.abs(), ascending=False)
                  .head(top_n))
 
         phrases = []
@@ -643,35 +813,83 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
             feat = r.feature
             direction = r.direction
             
-            # Determine feature type
-            is_binary = False
-            if '_' in feat:  # encoded feature
+            if use_original_units:
+                cluster_med = r.cluster_median_orig
+                overall_med = r.overall_median_orig
+            else:
+                cluster_med = r.cluster_median
+                overall_med = r.overall_median
+            
+            # Determinar tipo de característica
+            if '_' in feat and raw is not None:  # característica codificada
                 base, level = feat.rsplit('_', 1)
                 if base in binary_features:
-                    is_binary = True
-                    # Calculate actual percentages
+                    # Característica categórica/binaria
                     mask = (labels == cid)
                     cluster_data = raw.loc[mask, base]
                     overall_data = raw[base]
                     
-                    # Compute cluster vs overall percentages
+                    # Calcular porcentajes reales
                     cluster_pct = 100.0 * (cluster_data == level).mean()
                     overall_pct = 100.0 * (overall_data == level).mean()
                     
-                    if direction == "higher":
-                        phrases.append(f"{level} {base} is more common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
+                    # Calcular diferencia relativa
+                    if overall_pct > 0:
+                        rel_diff = (cluster_pct - overall_pct) / overall_pct
+                        diff_text = percent_diff_text(cluster_pct, overall_pct)
                     else:
-                        phrases.append(f"{level} {base} is less common ({cluster_pct:.1f}% vs {overall_pct:.1f}% overall)")
+                        diff_text = ""
+                    
+                    if direction == "higher":
+                        phrases.append(f"{prettify(level)} en {prettify(base)} más común: {cluster_pct:.0f}% vs {overall_pct:.0f}% {diff_text}")
+                    else:
+                        phrases.append(f"{prettify(level)} en {prettify(base)} menos común: {cluster_pct:.0f}% vs {overall_pct:.0f}% {diff_text}")
                 else:
-                    # Handle non-binary encoded features
-                    phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
+                    # Característica numérica codificada
+                    if overall_med != 0:
+                        rel_diff = (cluster_med - overall_med) / abs(overall_med)
+                        diff_text = percent_diff_text(cluster_med, overall_med)
+                    else:
+                        diff_text = ""
+                    
+                    # Determinar adjetivo
+                    if rel_diff >= 0.25:
+                        adj = "mucho más alto"
+                    elif rel_diff >= 0.10:
+                        adj = "más alto"
+                    elif rel_diff <= -0.25:
+                        adj = "mucho más bajo"
+                    elif rel_diff <= -0.10:
+                        adj = "más bajo"
+                    else:
+                        adj = "similar a la media"
+                    
+                    phrases.append(f"{prettify(feat)} {adj}: {cluster_med:.2f} vs {overall_med:.2f} {diff_text}")
             else:
-                # Handle non-encoded features
-                phrases.append(humanize_feature(feat, direction, r.cluster_median, r.overall_median, False))
+                # Característica numérica no codificada
+                if overall_med != 0:
+                    rel_diff = (cluster_med - overall_med) / abs(overall_med)
+                    diff_text = percent_diff_text(cluster_med, overall_med)
+                else:
+                    diff_text = ""
+                
+                # Determinar adjetivo
+                if rel_diff >= 0.25:
+                    adj = "mucho más alto"
+                elif rel_diff >= 0.10:
+                    adj = "más alto"
+                elif rel_diff <= -0.25:
+                    adj = "mucho más bajo"
+                elif rel_diff <= -0.10:
+                    adj = "más bajo"
+                else:
+                    adj = "similar a la media"
+                
+                phrases.append(f"{prettify(feat)} {adj}: {cluster_med:.2f} vs {overall_med:.2f} {diff_text}")
 
-        line = f"Cluster {cid} (n={sizes.get(cid, 0)}): " + ", ".join(phrases) + "."
+        line = f"Cluster {cid} (n={sizes.get(cid, 0)}): " + "; ".join(phrases) + "."
 
-        # Add target comparison if available
+        # Añadir comparación del objetivo si está disponible
         if target_binary is not None:
             mask = (labels == cid)
             tb_c = target_binary.loc[mask]
@@ -680,17 +898,22 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 pct0 = 100.0 * (tb_c == 0.0).mean()
                 if pct1 >= pct0:
                     chosen_cls = 1.0
-                    pct_here   = pct1
-                    pct_over   = overall_pct_1
+                    pct_here = pct1
+                    pct_over = overall_pct_1
                 else:
                     chosen_cls = 0.0
-                    pct_here   = pct0
-                    pct_over   = 100.0 - overall_pct_1 if overall_pct_1 is not None else None
+                    pct_here = pct0
+                    pct_over = 100.0 - overall_pct_1 if overall_pct_1 is not None else None
 
                 if pct_over is not None:
-                    line += f" {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster vs {pct_over:.1f}% overall."
+                    diff_target = abs(pct_here - pct_over)
+                    if pct_here > pct_over:
+                        target_text = f"≈ {diff_target:.0f}% más que la media"
+                    else:
+                        target_text = f"≈ {diff_target:.0f}% menos que la media"
+                    line += f" → {target}={chosen_cls:.0f} en {pct_here:.0f}% vs {pct_over:.0f}% ({target_text})"
                 else:
-                    line += f" {target}={chosen_cls:.0f} occurs in {pct_here:.1f}% of this cluster."
+                    line += f" → {target}={chosen_cls:.0f} en {pct_here:.0f}%"
         summaries.append(line)
 
     for s in summaries:
@@ -1036,7 +1259,13 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
     
     # Top driver features (moved before cluster interpretations)
     story.append(Paragraph("Top Driver Features", heading_style))
-    drivers = results["kmeans_drivers"]
+    # Usar drivers en unidades originales si están disponibles
+    if "kmeans_drivers_orig" in results and not results["kmeans_drivers_orig"].empty:
+        drivers = results["kmeans_drivers_orig"]
+        use_original_units = True
+    else:
+        drivers = results["kmeans_drivers"]
+        use_original_units = False
     
     if not drivers.empty:
         # Create table data
@@ -1045,13 +1274,22 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
         for cluster_id in sorted(drivers['cluster'].unique()):
             cluster_drivers = drivers[drivers['cluster'] == cluster_id].head(top_n)
             for _, row in cluster_drivers.iterrows():
+                if use_original_units:
+                    z_score = row['z_score']
+                    cluster_med = row['cluster_median_orig']
+                    overall_med = row['overall_median_orig']
+                else:
+                    z_score = row['z_median']
+                    cluster_med = row['cluster_median']
+                    overall_med = row['overall_median']
+                
                 table_data.append([
                     str(int(row['cluster'])),
                     row['feature'],
                     row['direction'],
-                    f"{row['z_median']:.2f}",
-                    f"{row['cluster_median']:.2f}",
-                    f"{row['overall_median']:.2f}"
+                    f"{z_score:.2f}",
+                    f"{cluster_med:.2f}",
+                    f"{overall_med:.2f}"
                 ])
         
         drivers_table = Table(table_data, colWidths=[0.8*inch, 1.5*inch, 0.8*inch, 0.8*inch, 1*inch, 1*inch])
