@@ -333,7 +333,7 @@ def prettify(name):
 
 def percent_diff_text(a, b):
     """
-    Genera texto de diferencia porcentual.
+    Generates percentage difference text.
     """
     if b == 0:
         return ""
@@ -342,9 +342,9 @@ def percent_diff_text(a, b):
     percent = abs(rel_diff) * 100
     
     if rel_diff > 0:
-        return f"({percent:.0f}% más que la media)"
+        return f"({percent:.0f}% more than average)"
     else:
-        return f"({percent:.0f}% menos que la media)"
+        return f"({percent:.0f}% less than average)"
 
 def explain_clusters_numeric_original(raw_df, X_scaled, labels, scaler_info, top_n=5):
     """
@@ -872,9 +872,9 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                         diff_text = ""
                     
                     if direction == "higher":
-                        phrases.append(f"{prettify(level)} en {prettify(base)} más común: {cluster_pct:.0f}% vs {overall_pct:.0f}% {diff_text}")
+                        phrases.append(f"{prettify(level)} in {prettify(base)} more common: {cluster_pct:.0f}% vs {overall_pct:.0f}% {diff_text}")
                     else:
-                        phrases.append(f"{prettify(level)} en {prettify(base)} menos común: {cluster_pct:.0f}% vs {overall_pct:.0f}% {diff_text}")
+                        phrases.append(f"{prettify(level)} in {prettify(base)} less common: {cluster_pct:.0f}% vs {overall_pct:.0f}% {diff_text}")
                 else:
                     # Característica numérica codificada
                     if overall_med != 0:
@@ -883,17 +883,17 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                     else:
                         diff_text = ""
                     
-                    # Determinar adjetivo
+                    # Determine adjective
                     if rel_diff >= 0.25:
-                        adj = "mucho más alto"
+                        adj = "much higher"
                     elif rel_diff >= 0.10:
-                        adj = "más alto"
+                        adj = "higher"
                     elif rel_diff <= -0.25:
-                        adj = "mucho más bajo"
+                        adj = "much lower"
                     elif rel_diff <= -0.10:
-                        adj = "más bajo"
+                        adj = "lower"
                     else:
-                        adj = "similar a la media"
+                        adj = "similar to average"
                     
                     phrases.append(f"{prettify(feat)} {adj}: {cluster_med:.2f} vs {overall_med:.2f} {diff_text}")
             else:
@@ -904,17 +904,17 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 else:
                     diff_text = ""
                 
-                # Determinar adjetivo
+                # Determine adjective
                 if rel_diff >= 0.25:
-                    adj = "mucho más alto"
+                    adj = "much higher"
                 elif rel_diff >= 0.10:
-                    adj = "más alto"
+                    adj = "higher"
                 elif rel_diff <= -0.25:
-                    adj = "mucho más bajo"
+                    adj = "much lower"
                 elif rel_diff <= -0.10:
-                    adj = "más bajo"
+                    adj = "lower"
                 else:
-                    adj = "similar a la media"
+                    adj = "similar to average"
                 
                 phrases.append(f"{prettify(feat)} {adj}: {cluster_med:.2f} vs {overall_med:.2f} {diff_text}")
 
@@ -939,12 +939,12 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 if pct_over is not None:
                     diff_target = abs(pct_here - pct_over)
                     if pct_here > pct_over:
-                        target_text = f"≈ {diff_target:.0f}% más que la media"
+                        target_text = f"≈ {diff_target:.0f}% more than average"
                     else:
-                        target_text = f"≈ {diff_target:.0f}% menos que la media"
-                    line += f" → {target}={chosen_cls:.0f} en {pct_here:.0f}% vs {pct_over:.0f}% ({target_text})"
+                        target_text = f"≈ {diff_target:.0f}% less than average"
+                    line += f" → {target}={chosen_cls:.0f} in {pct_here:.0f}% vs {pct_over:.0f}% ({target_text})"
                 else:
-                    line += f" → {target}={chosen_cls:.0f} en {pct_here:.0f}%"
+                    line += f" → {target}={chosen_cls:.0f} in {pct_here:.0f}%"
         summaries.append(line)
 
     for s in summaries:
