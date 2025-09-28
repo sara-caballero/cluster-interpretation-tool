@@ -314,7 +314,7 @@ def inverse_scale(series_or_scalar, scaler_info, feature_name=None):
     else:
         # Serie de pandas
         result = series_or_scalar.copy()
-        for col in series_or_scalar.columns:
+        for col in series_or_scalar.index:
             if col in scaler_info["per_feature"]:
                 params = scaler_info["per_feature"][col]
                 
@@ -471,13 +471,36 @@ def run_pipeline(
                 X[c] = X[c].astype(float)
 
         # Feature scaling
+        scaler_info = {"method": scaling, "per_feature": {}}
+        
         if scaling == "standard":
             scaler = StandardScaler()
             X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
+            # Guardar parámetros de escalado estándar
+            for i, col in enumerate(X.columns):
+                scaler_info["per_feature"][col] = {
+                    "mean": scaler.mean_[i],
+                    "std": scaler.scale_[i]
+                }
         elif scaling == "minmax":
             X_scaled = minmax_df(X).fillna(0.0)
+            # Guardar parámetros de escalado minmax
+            for col in X.columns:
+                min_val = X[col].min()
+                max_val = X[col].max()
+                range_val = max_val - min_val
+                scaler_info["per_feature"][col] = {
+                    "min": min_val,
+                    "range": range_val
+                }
         elif scaling == "none":
             X_scaled = X.astype(float)
+            # Para "none", no hay transformación
+            for col in X.columns:
+                scaler_info["per_feature"][col] = {
+                    "min": 0,
+                    "range": 1
+                }
         else:
             raise ValueError("scaling must be 'minmax', 'standard', or 'none'")
 
@@ -660,8 +683,16 @@ def run_pipeline(
     drivers_km_orig = None
     if preprocessed_data is not None and "scaler_info" in preprocessed_data:
         print("Calculating drivers in original units...")
+        # Use the original raw data from preprocessing (before scaling)
+        raw_original = preprocessed_data["raw_data"]
         drivers_km_orig = explain_clusters_numeric_original(
-            raw, X_scaled, labels_kmeans, preprocessed_data["scaler_info"], top_n=5
+            raw_original, X_scaled, labels_kmeans, preprocessed_data["scaler_info"], top_n=5
+        )
+    elif 'scaler_info' in locals():
+        print("Calculating drivers in original units...")
+        # Use the raw data from current run
+        drivers_km_orig = explain_clusters_numeric_original(
+            raw, X_scaled, labels_kmeans, scaler_info, top_n=5
         )
 
     # Feature distribution analysis
