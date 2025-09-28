@@ -912,7 +912,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
         drivers = results["kmeans_drivers_orig"].copy()
         use_original_units = True
     else:
-    drivers = results["kmeans_drivers"].copy()
+        drivers = results["kmeans_drivers"].copy()
         use_original_units = False
 
     labels = results["kmeans_labels"]
