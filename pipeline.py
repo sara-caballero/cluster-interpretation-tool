@@ -164,6 +164,7 @@ def preprocess_data(
     separator=",",
     alpha=1.0,
     beta=1.0,
+    auto_balance=True,
 ):
     """
     Preprocess data for clustering analysis.
@@ -208,9 +209,11 @@ def preprocess_data(
             X_encoded[c] = X_encoded[c].astype(float)
     
     # Feature re-weighting (balance categorical vs numeric)
-    if alpha != 1.0 or beta != 1.0:
+    if auto_balance:
+        print("Applying feature re-weighting with auto-balance...")
+    else:
         print(f"Applying feature re-weighting: alpha={alpha}, beta={beta}")
-        X_encoded = reweight_features(X_encoded, X, alpha=alpha, beta=beta)
+    X_encoded = reweight_features(X_encoded, X, alpha=alpha, beta=beta, auto_balance=auto_balance)
     
     # Feature scaling
     scaler_info = {"method": scaling, "per_feature": {}}
@@ -389,15 +392,16 @@ def format_categorical_comparison(cluster_pct, overall_pct):
         else:
             return f"{cluster_pct:.0f}% vs {overall_pct:.0f}% (much less common)"
 
-def reweight_features(X, original_df, alpha=1.0, beta=1.0):
+def reweight_features(X, original_df, alpha=1.0, beta=1.0, auto_balance=True):
     """
     Re-weights features to balance categorical vs numeric features.
     
     Args:
         X: DataFrame with encoded features (after get_dummies)
         original_df: Original DataFrame before encoding
-        alpha: Weight for categorical features (default 1.0)
-        beta: Weight for numeric features (default 1.0)
+        alpha: Weight for categorical features (used only if auto_balance=False)
+        beta: Weight for numeric features (used only if auto_balance=False)
+        auto_balance: If True, automatically calculate alpha and beta based on feature ratios
     
     Returns:
         DataFrame with re-weighted features
@@ -405,6 +409,31 @@ def reweight_features(X, original_df, alpha=1.0, beta=1.0):
     import numpy as np
     
     X_weighted = X.copy()
+    
+    # Auto-balance logic
+    if auto_balance:
+        # Count numeric columns (from original_df)
+        n_num = len([col for col in original_df.columns if col in X_weighted.columns])
+        
+        # Count dummy columns (encoded categorical features)
+        n_dummy = len([col for col in X_weighted.columns if '_' in col])
+        
+        # Calculate ratio
+        ratio = n_dummy / max(n_num, 1)
+        
+        # Set alpha based on ratio
+        if ratio >= 1.5:
+            alpha = 0.6
+        elif 0.75 <= ratio < 1.5:
+            alpha = 0.7
+        else:
+            alpha = 0.8
+        
+        # Set beta
+        beta = 1.3
+        
+        print(f"Auto-balance: {n_dummy} dummy columns, {n_num} numeric columns (ratio={ratio:.2f})")
+        print(f"Auto-selected: alpha={alpha}, beta={beta}")
     
     # Get original column names (before encoding)
     original_cols = set(original_df.columns)
@@ -526,6 +555,7 @@ def run_pipeline(
     separator=",",
     alpha=1.0,
     beta=1.0,
+    auto_balance=True,
 ):
 
     # Handle preprocessed data or perform preprocessing
@@ -555,9 +585,11 @@ def run_pipeline(
                 X[c] = X[c].astype(float)
 
         # Feature re-weighting (balance categorical vs numeric)
-        if alpha != 1.0 or beta != 1.0:
+        if auto_balance:
+            print("Applying feature re-weighting with auto-balance...")
+        else:
             print(f"Applying feature re-weighting: alpha={alpha}, beta={beta}")
-            X = reweight_features(X, raw[feat_cols], alpha=alpha, beta=beta)
+        X = reweight_features(X, raw[feat_cols], alpha=alpha, beta=beta, auto_balance=auto_balance)
 
         # Feature scaling
         scaler_info = {"method": scaling, "per_feature": {}}

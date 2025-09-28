@@ -123,16 +123,27 @@ contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01
 
 # Feature re-weighting settings
 st.sidebar.markdown("### ⚖️ Feature Re-weighting")
-alpha = st.sidebar.slider(
-    "Categorical weight (α)", 
-    0.1, 3.0, 1.0, 0.1,
-    help="Weight for categorical features. Higher values give more importance to categorical variables."
+auto_balance = st.sidebar.checkbox(
+    "Auto balance categorical vs numeric (recommended)", 
+    value=True,
+    help="Auto balance adjusts alpha based on the number of dummy vs numeric features. If you turn it off, you can manually tweak alpha and beta."
 )
-beta = st.sidebar.slider(
-    "Numeric weight (β)", 
-    0.1, 3.0, 1.0, 0.1,
-    help="Weight for numeric features. Higher values give more importance to numeric variables."
-)
+
+if not auto_balance:
+    alpha = st.sidebar.slider(
+        "Categorical weight (α)", 
+        0.4, 1.2, 0.7, 0.1,
+        help="Weight for categorical features. Higher values give more importance to categorical variables."
+    )
+    beta = st.sidebar.slider(
+        "Numeric weight (β)", 
+        1.0, 1.8, 1.3, 0.1,
+        help="Weight for numeric features. Higher values give more importance to numeric variables."
+    )
+else:
+    # Default values when auto-balance is enabled
+    alpha = 0.7
+    beta = 1.3
 
 # Documentation access
 st.sidebar.markdown("---")
@@ -204,6 +215,7 @@ if file:
                         separator=sep_char,
                         alpha=alpha,
                         beta=beta,
+                        auto_balance=auto_balance,
                     )
                     st.session_state.preprocessed_data = preprocessed_info
 
@@ -316,6 +328,7 @@ if file:
                         separator=sep_char,
                         alpha=alpha,
                         beta=beta,
+                        auto_balance=auto_balance,
                     )
 
             st.success("Done!")
