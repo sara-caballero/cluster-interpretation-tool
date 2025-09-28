@@ -331,20 +331,56 @@ def prettify(name):
     """
     return name.replace("_", " ").title()
 
-def percent_diff_text(a, b):
+def format_numeric_comparison(cluster_val, overall_val):
     """
-    Generates percentage difference text.
+    Formats numeric comparison with clear thresholds and natural language.
     """
-    if b == 0:
-        return ""
+    if overall_val == 0:
+        if abs(cluster_val) < 0.01:
+            return "almost zero"
+        else:
+            return f"{cluster_val:.2f} vs {overall_val:.2f} (much different)"
     
-    rel_diff = (a - b) / abs(b)
-    percent = abs(rel_diff) * 100
+    rel_diff = (cluster_val - overall_val) / abs(overall_val)
+    abs_percent = abs(rel_diff) * 100
     
-    if rel_diff > 0:
-        return f"({percent:.0f}% more than average)"
+    # Format values
+    cluster_str = f"{cluster_val:.2f}" if abs(cluster_val) >= 0.01 else "0.00"
+    overall_str = f"{overall_val:.2f}" if abs(overall_val) >= 0.01 else "0.00"
+    
+    # Determine description
+    if abs_percent < 10:
+        return f"{cluster_str} vs {overall_str} (similar)"
+    elif abs_percent < 25:
+        if rel_diff > 0:
+            return f"{cluster_str} vs {overall_str} (slightly higher)"
+        else:
+            return f"{cluster_str} vs {overall_str} (slightly lower)"
     else:
-        return f"({percent:.0f}% less than average)"
+        if rel_diff > 0:
+            return f"{cluster_str} vs {overall_str} (much higher)"
+        else:
+            return f"{cluster_str} vs {overall_str} (much lower)"
+
+def format_categorical_comparison(cluster_pct, overall_pct):
+    """
+    Formats categorical comparison with prevalence and difference.
+    """
+    diff = cluster_pct - overall_pct
+    abs_diff = abs(diff)
+    
+    if abs_diff < 5:
+        return f"{cluster_pct:.0f}% vs {overall_pct:.0f}% (similar)"
+    elif abs_diff < 15:
+        if diff > 0:
+            return f"{cluster_pct:.0f}% vs {overall_pct:.0f}% (slightly more common)"
+        else:
+            return f"{cluster_pct:.0f}% vs {overall_pct:.0f}% (slightly less common)"
+    else:
+        if diff > 0:
+            return f"{cluster_pct:.0f}% vs {overall_pct:.0f}% (much more common)"
+        else:
+            return f"{cluster_pct:.0f}% vs {overall_pct:.0f}% (much less common)"
 
 def explain_clusters_numeric_original(raw_df, X_scaled, labels, scaler_info, top_n=5):
     """
@@ -851,100 +887,63 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 cluster_med = r.cluster_median
                 overall_med = r.overall_median
             
-            # Determinar tipo de característica
-            if '_' in feat and raw is not None:  # característica codificada
+            # Determine feature type and format accordingly
+            if '_' in feat and raw is not None:  # encoded feature
                 base, level = feat.rsplit('_', 1)
                 if base in binary_features:
-                    # Característica categórica/binaria
+                    # Categorical/binary feature
                     mask = (labels == cid)
                     cluster_data = raw.loc[mask, base]
                     overall_data = raw[base]
                     
-                    # Calcular porcentajes reales
+                    # Calculate real percentages
                     cluster_pct = 100.0 * (cluster_data == level).mean()
                     overall_pct = 100.0 * (overall_data == level).mean()
                     
-                    # Calcular diferencia relativa
-                    if overall_pct > 0:
-                        rel_diff = (cluster_pct - overall_pct) / overall_pct
-                        diff_text = percent_diff_text(cluster_pct, overall_pct)
-                    else:
-                        diff_text = ""
-                    
-                    if direction == "higher":
-                        phrases.append(f"{prettify(level)} in {prettify(base)} more common: {cluster_pct:.0f}% vs {overall_pct:.0f}% {diff_text}")
-                    else:
-                        phrases.append(f"{prettify(level)} in {prettify(base)} less common: {cluster_pct:.0f}% vs {overall_pct:.0f}% {diff_text}")
+                    # Format categorical comparison
+                    comparison_text = format_categorical_comparison(cluster_pct, overall_pct)
+                    phrases.append(f"{prettify(level)} in {prettify(base)}: {comparison_text}")
                 else:
-                    # Característica numérica codificada
-                    if overall_med != 0:
-                        rel_diff = (cluster_med - overall_med) / abs(overall_med)
-                        diff_text = percent_diff_text(cluster_med, overall_med)
-                    else:
-                        diff_text = ""
-                    
-                    # Determine adjective
-                    if rel_diff >= 0.25:
-                        adj = "much higher"
-                    elif rel_diff >= 0.10:
-                        adj = "higher"
-                    elif rel_diff <= -0.25:
-                        adj = "much lower"
-                    elif rel_diff <= -0.10:
-                        adj = "lower"
-                    else:
-                        adj = "similar to average"
-                    
-                    phrases.append(f"{prettify(feat)} {adj}: {cluster_med:.2f} vs {overall_med:.2f} {diff_text}")
+                    # Numeric encoded feature
+                    comparison_text = format_numeric_comparison(cluster_med, overall_med)
+                    phrases.append(f"{prettify(feat)}: {comparison_text}")
             else:
-                # Característica numérica no codificada
-                if overall_med != 0:
-                    rel_diff = (cluster_med - overall_med) / abs(overall_med)
-                    diff_text = percent_diff_text(cluster_med, overall_med)
-                else:
-                    diff_text = ""
-                
-                # Determine adjective
-                if rel_diff >= 0.25:
-                    adj = "much higher"
-                elif rel_diff >= 0.10:
-                    adj = "higher"
-                elif rel_diff <= -0.25:
-                    adj = "much lower"
-                elif rel_diff <= -0.10:
-                    adj = "lower"
-                else:
-                    adj = "similar to average"
-                
-                phrases.append(f"{prettify(feat)} {adj}: {cluster_med:.2f} vs {overall_med:.2f} {diff_text}")
+                # Non-encoded numeric feature
+                comparison_text = format_numeric_comparison(cluster_med, overall_med)
+                phrases.append(f"{prettify(feat)}: {comparison_text}")
 
         line = f"Cluster {cid} (n={sizes.get(cid, 0)}): " + "; ".join(phrases) + "."
 
-        # Añadir comparación del objetivo si está disponible
+        # Add target comparison if available
         if target_binary is not None:
             mask = (labels == cid)
             tb_c = target_binary.loc[mask]
             if tb_c.notna().any():
                 pct1 = 100.0 * (tb_c == 1.0).mean()
                 pct0 = 100.0 * (tb_c == 0.0).mean()
-                if pct1 >= pct0:
-                    chosen_cls = 1.0
-                    pct_here = pct1
-                    pct_over = overall_pct_1
-                else:
-                    chosen_cls = 0.0
-                    pct_here = pct0
-                    pct_over = 100.0 - overall_pct_1 if overall_pct_1 is not None else None
-
+                
+                # Always use target=1 for consistency
+                pct_here = pct1
+                pct_over = overall_pct_1
+                
                 if pct_over is not None:
                     diff_target = abs(pct_here - pct_over)
-                    if pct_here > pct_over:
-                        target_text = f"≈ {diff_target:.0f}% more than average"
+                    if diff_target < 5:
+                        target_desc = "similar frequency"
+                    elif diff_target < 15:
+                        if pct_here > pct_over:
+                            target_desc = "slightly more frequent"
+                        else:
+                            target_desc = "slightly less frequent"
                     else:
-                        target_text = f"≈ {diff_target:.0f}% less than average"
-                    line += f" → {target}={chosen_cls:.0f} in {pct_here:.0f}% vs {pct_over:.0f}% ({target_text})"
+                        if pct_here > pct_over:
+                            target_desc = "much more frequent"
+                        else:
+                            target_desc = "much less frequent"
+                    
+                    line += f" → {target}=1 in {pct_here:.0f}% vs {pct_over:.0f}% ({target_desc})"
                 else:
-                    line += f" → {target}={chosen_cls:.0f} in {pct_here:.0f}%"
+                    line += f" → {target}=1 in {pct_here:.0f}%"
         summaries.append(line)
 
     for s in summaries:
