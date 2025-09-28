@@ -303,6 +303,10 @@ if file:
 
             st.success("Done!")
 
+            # Display feature importance table (moved before cluster summaries)
+            with st.expander("Top driver features (table)"):
+                st.dataframe(results["kmeans_drivers"])
+
             # Display cluster summaries
             st.subheader("Cluster summaries")
             summaries = auto_describe_clusters(
@@ -330,7 +334,8 @@ if file:
                     max_k=max_k,
                     outlier_method=outlier_method,
                     contamination=contamination,
-                    preprocessed_data=preprocessed_data
+                    preprocessed_data=preprocessed_data,
+                    original_filename=file.name
                 )
                 
                 st.download_button(
@@ -343,10 +348,6 @@ if file:
                 st.error("PDF generation requires reportlab. Install with: pip install reportlab")
             except Exception as e:
                 st.error(f"Error generating PDF: {str(e)}")
-
-            # Display feature importance table
-            with st.expander("Top driver features (table)"):
-                st.dataframe(results["kmeans_drivers"])
     else:
         st.info("Preprocess your data first before running clustering.")
 else:

@@ -856,7 +856,7 @@ def generate_visualization_images(results, embedder="PCA", manual_k=None, max_k=
 def generate_clustering_pdf(results, file_path=None, target=None, top_n=3, 
                            scaling="minmax", embedder="PCA", manual_k=None, 
                            max_k=None, outlier_method="none", contamination=0.03,
-                           preprocessed_data=None):
+                           preprocessed_data=None, original_filename=None):
     """
     Generate a comprehensive PDF report of clustering results.
     
@@ -894,15 +894,19 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
     # Build PDF content
     story = []
     
-    # Title
-    story.append(Paragraph("Cluster Analysis Report", title_style))
+    # Title with database name
+    if original_filename:
+        title_text = f"Cluster Analysis Report - {original_filename}"
+    else:
+        title_text = "Cluster Analysis Report"
+    story.append(Paragraph(title_text, title_style))
     story.append(Spacer(1, 12))
     
     # Report metadata
     story.append(Paragraph("Report Information", heading_style))
     metadata_data = [
-        ['Generated on:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
-        ['Original file:', file_path if file_path else 'Not specified'],
+        ['Generated on (UTC):', datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')],
+        ['Original file:', original_filename if original_filename else 'Not specified'],
         ['Scaling method:', scaling],
         ['Embedding method:', embedder],
         ['Outlier removal:', outlier_method],
@@ -928,87 +932,8 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
     story.append(metadata_table)
     story.append(Spacer(1, 20))
     
-    # Data summary
-    story.append(Paragraph("Data Summary", heading_style))
-    X_scaled = results["X_scaled"]
-    labels = results["kmeans_labels"]
-    
-    summary_data = [
-        ['Total samples:', str(len(X_scaled))],
-        ['Total features:', str(len(X_scaled.columns))],
-        ['Number of clusters:', str(len(labels.unique()))],
-        ['Silhouette score:', f"{silhouette_score(X_scaled, labels):.3f}"],
-    ]
-    
-    # Add cluster sizes
-    cluster_sizes = labels.value_counts().sort_index()
-    for i, (cluster_id, size) in enumerate(cluster_sizes.items()):
-        summary_data.append([f'Cluster {cluster_id} size:', str(size)])
-    
-    summary_table = Table(summary_data, colWidths=[2*inch, 1*inch])
-    summary_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-        ('BACKGROUND', (1, 0), (1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black)
-    ]))
-    story.append(summary_table)
-    story.append(Spacer(1, 20))
-    
-    # Cluster interpretations
-    story.append(Paragraph("Cluster Interpretations", heading_style))
-    summaries = auto_describe_clusters(results, file_path, target, top_n)
-    
-    for summary in summaries:
-        story.append(Paragraph(summary, normal_style))
-        story.append(Spacer(1, 6))
-    
-    story.append(Spacer(1, 20))
-    
-    # Feature importance table
-    story.append(Paragraph("Top Driver Features", heading_style))
-    drivers = results["kmeans_drivers"]
-    
-    if not drivers.empty:
-        # Create table data
-        table_data = [['Cluster', 'Feature', 'Direction', 'Z-Score', 'Cluster Median', 'Overall Median']]
-        
-        for cluster_id in sorted(drivers['cluster'].unique()):
-            cluster_drivers = drivers[drivers['cluster'] == cluster_id].head(top_n)
-            for _, row in cluster_drivers.iterrows():
-                table_data.append([
-                    str(int(row['cluster'])),
-                    row['feature'],
-                    row['direction'],
-                    f"{row['z_median']:.2f}",
-                    f"{row['cluster_median']:.2f}",
-                    f"{row['overall_median']:.2f}"
-                ])
-        
-        drivers_table = Table(table_data, colWidths=[0.8*inch, 1.5*inch, 0.8*inch, 0.8*inch, 1*inch, 1*inch])
-        drivers_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        story.append(drivers_table)
-    
-    story.append(Spacer(1, 20))
-    
-    # Add preprocessing information if available
+    # Data preprocessing information (moved up)
     if preprocessed_data is not None:
-        story.append(Spacer(1, 20))
         story.append(Paragraph("Data Preprocessing Summary", heading_style))
         
         prep_data = [
@@ -1032,9 +957,9 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
             ('GRID', (0, 0), (-1, -1), 1, colors.black)
         ]))
         story.append(prep_table)
+        story.append(Spacer(1, 20))
     
-    # Generate and include visualization images
-    story.append(Spacer(1, 20))
+    # Visualizations (moved up)
     story.append(Paragraph("Visualizations", heading_style))
     
     # Generate visualization images
@@ -1075,6 +1000,84 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
         img = Image(img_buffer, width=7*inch, height=5*inch)
         story.append(img)
         story.append(Spacer(1, 12))
+    
+    story.append(Spacer(1, 20))
+    
+    # Data summary
+    story.append(Paragraph("Data Summary", heading_style))
+    X_scaled = results["X_scaled"]
+    labels = results["kmeans_labels"]
+    
+    summary_data = [
+        ['Total samples:', str(len(X_scaled))],
+        ['Total features:', str(len(X_scaled.columns))],
+        ['Number of clusters:', str(len(labels.unique()))],
+        ['Silhouette score:', f"{silhouette_score(X_scaled, labels):.3f}"],
+    ]
+    
+    # Add cluster sizes
+    cluster_sizes = labels.value_counts().sort_index()
+    for i, (cluster_id, size) in enumerate(cluster_sizes.items()):
+        summary_data.append([f'Cluster {cluster_id} size:', str(size)])
+    
+    summary_table = Table(summary_data, colWidths=[2*inch, 1*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('BACKGROUND', (1, 0), (1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 20))
+    
+    # Top driver features (moved before cluster interpretations)
+    story.append(Paragraph("Top Driver Features", heading_style))
+    drivers = results["kmeans_drivers"]
+    
+    if not drivers.empty:
+        # Create table data
+        table_data = [['Cluster', 'Feature', 'Direction', 'Z-Score', 'Cluster Median', 'Overall Median']]
+        
+        for cluster_id in sorted(drivers['cluster'].unique()):
+            cluster_drivers = drivers[drivers['cluster'] == cluster_id].head(top_n)
+            for _, row in cluster_drivers.iterrows():
+                table_data.append([
+                    str(int(row['cluster'])),
+                    row['feature'],
+                    row['direction'],
+                    f"{row['z_median']:.2f}",
+                    f"{row['cluster_median']:.2f}",
+                    f"{row['overall_median']:.2f}"
+                ])
+        
+        drivers_table = Table(table_data, colWidths=[0.8*inch, 1.5*inch, 0.8*inch, 0.8*inch, 1*inch, 1*inch])
+        drivers_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(drivers_table)
+    
+    story.append(Spacer(1, 20))
+    
+    # Cluster interpretations (moved to the end)
+    story.append(Paragraph("Cluster Interpretations", heading_style))
+    summaries = auto_describe_clusters(results, file_path, target, top_n)
+    
+    for summary in summaries:
+        story.append(Paragraph(summary, normal_style))
+        story.append(Spacer(1, 6))
     
     # Add note about the report
     story.append(Spacer(1, 20))
