@@ -537,6 +537,7 @@ def run_pipeline(
         "kmeans_labels": labels_kmeans,
         "kmeans_model": km_final,
         "kmeans_drivers": drivers_km,
+        "raw_data": raw,  # Include raw data for PDF generation
     }
 
 
@@ -695,6 +696,161 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
     for s in summaries:
         print(s)
     return summaries
+
+
+def generate_visualization_images(results, embedder="PCA", manual_k=None, max_k=None):
+    """
+    Generate visualization images for PDF inclusion.
+    
+    Args:
+        results: Dictionary containing clustering results
+        embedder: Embedding method used
+        manual_k: Manual k value if used
+        max_k: Maximum k value tested
+    
+    Returns:
+        dict: Dictionary with image data for each visualization
+    """
+    if not HAS_REPORTLAB:
+        return {}
+    
+    images = {}
+    X_scaled = results["X_scaled"]
+    labels = results["kmeans_labels"]
+    embed = results["embedding"]
+    
+    try:
+        # 1. 2D Embedding Plot
+        plt.figure(figsize=(8, 6))
+        plt.scatter(embed["X"], embed["Y"], s=10, alpha=0.6)
+        plt.title(f"{embedder} Embedding", fontsize=14, fontweight='bold')
+        plt.xlabel("Component 1", fontsize=12)
+        plt.ylabel("Component 2", fontsize=12)
+        plt.grid(True, alpha=0.3)
+        
+        # Save to buffer
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+        buffer.seek(0)
+        images['embedding'] = buffer.getvalue()
+        plt.close()
+        
+        # 2. Model Selection Plot (if we have k values to show)
+        if max_k is not None:
+            k_vals = list(range(2, min(max_k, len(X_scaled) - 1) + 1))
+            if len(k_vals) > 0:
+                inertias, sils = [], []
+                for k in k_vals:
+                    km = KMeans(n_clusters=k, init="k-means++", n_init=10, random_state=42)
+                    lab = km.fit_predict(X_scaled)
+                    inertias.append(km.inertia_)
+                    sils.append(silhouette_score(X_scaled, lab))
+                
+                inertia_norm = np.asarray(inertias, float) / max(inertias)
+                
+                plt.figure(figsize=(10, 6))
+                ax1 = plt.gca()
+                ax1.plot(k_vals, inertia_norm, marker="o", linewidth=2, markersize=8, 
+                        label="Normalized Inertia (Elbow)", color='blue')
+                ax1.set_xlabel("Number of Clusters (k)", fontsize=12)
+                ax1.set_ylabel("Normalized Inertia [0..1]", fontsize=12, color='blue')
+                ax1.tick_params(axis='y', labelcolor='blue')
+                ax1.grid(True, alpha=0.3)
+                
+                ax2 = ax1.twinx()
+                ax2.plot(k_vals, sils, marker="X", linewidth=2, markersize=8, 
+                        label="Silhouette Score", color='red', linestyle='--')
+                ax2.set_ylabel("Silhouette Score [-1..1]", fontsize=12, color='red')
+                ax2.tick_params(axis='y', labelcolor='red')
+                
+                # Highlight selected k
+                if manual_k is not None and manual_k in k_vals:
+                    k_idx = k_vals.index(manual_k)
+                    ax1.axvline(x=manual_k, color='green', linestyle=':', linewidth=3, 
+                               alpha=0.7, label=f'Selected k={manual_k}')
+                    ax1.text(manual_k, inertia_norm[k_idx], f'k={manual_k}', 
+                             ha="center", va="bottom", color='green', fontweight='bold', fontsize=10)
+                else:
+                    # Find best k by silhouette
+                    best_k_idx = np.argmax(sils)
+                    best_k = k_vals[best_k_idx]
+                    ax1.axvline(x=best_k, color='green', linestyle=':', linewidth=3, 
+                               alpha=0.7, label=f'Best k={best_k}')
+                    ax1.text(best_k, inertia_norm[best_k_idx], f'k={best_k}', 
+                             ha="center", va="bottom", color='green', fontweight='bold', fontsize=10)
+                
+                plt.title("Model Selection: Inertia vs Silhouette Analysis", fontsize=14, fontweight='bold')
+                ax1.legend(loc="upper left")
+                ax2.legend(loc="upper right")
+                
+                buffer = io.BytesIO()
+                plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+                buffer.seek(0)
+                images['model_selection'] = buffer.getvalue()
+                plt.close()
+        
+        # 3. Final Clustering Plot
+        plt.figure(figsize=(8, 6))
+        colors_list = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
+        for i, c in enumerate(sorted(labels.unique())):
+            pts = embed.loc[labels == c]
+            plt.scatter(pts["X"], pts["Y"], s=15, label=f"Cluster {c}", 
+                       color=colors_list[i % len(colors_list)], alpha=0.7)
+        
+        plt.legend(fontsize=10)
+        plt.title(f"Final Clustering Results (k={len(labels.unique())})", fontsize=14, fontweight='bold')
+        plt.xlabel("Component 1", fontsize=12)
+        plt.ylabel("Component 2", fontsize=12)
+        plt.grid(True, alpha=0.3)
+        
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+        buffer.seek(0)
+        images['clustering'] = buffer.getvalue()
+        plt.close()
+        
+        # 4. Feature Distribution Plots (top 6 features)
+        top_features = results["kmeans_drivers"].groupby("feature")["z_median"].apply(
+            lambda s: np.nanmean(np.abs(s))).sort_values(ascending=False).head(6).index.tolist()
+        
+        if top_features:
+            n_features = len(top_features)
+            n_cols = 3
+            n_rows = (n_features + n_cols - 1) // n_cols
+            
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 4 * n_rows))
+            if n_rows == 1:
+                axes = axes.reshape(1, -1)
+            
+            tmp = X_scaled.copy()
+            tmp["Cluster"] = labels.values
+            
+            for i, col in enumerate(top_features):
+                if i < len(top_features):
+                    row, col_idx = i // n_cols, i % n_cols
+                    sns.boxplot(x="Cluster", y=col, data=tmp, ax=axes[row, col_idx])
+                    axes[row, col_idx].set_title(f"{col} by Cluster", fontsize=10, fontweight='bold')
+                    axes[row, col_idx].tick_params(axis='x', labelsize=9)
+                    axes[row, col_idx].tick_params(axis='y', labelsize=9)
+            
+            # Hide empty subplots
+            for i in range(n_features, n_rows * n_cols):
+                row, col_idx = i // n_cols, i % n_cols
+                axes[row, col_idx].set_visible(False)
+            
+            plt.suptitle("Feature Distributions by Cluster (Top Features)", fontsize=14, fontweight='bold')
+            plt.tight_layout()
+            
+            buffer = io.BytesIO()
+            plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+            buffer.seek(0)
+            images['feature_distributions'] = buffer.getvalue()
+            plt.close()
+        
+    except Exception as e:
+        print(f"Error generating visualization images: {e}")
+    
+    return images
 
 
 def generate_clustering_pdf(results, file_path=None, target=None, top_n=3, 
@@ -877,28 +1033,57 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
         ]))
         story.append(prep_table)
     
-    # Add visualization information
+    # Generate and include visualization images
     story.append(Spacer(1, 20))
-    story.append(Paragraph("Visualizations Generated", heading_style))
+    story.append(Paragraph("Visualizations", heading_style))
     
-    viz_info = [
-        "• 2D Embedding Plot: Shows data structure in reduced dimensions",
-        "• Model Selection Plot: Displays inertia and silhouette scores for different k values",
-        "• Final Clustering Plot: Shows cluster assignments on 2D embedding",
-        "• Feature Distribution Plots: Box plots showing feature distributions by cluster"
-    ]
+    # Generate visualization images
+    images = generate_visualization_images(results, embedder, manual_k, max_k)
     
-    for info in viz_info:
-        story.append(Paragraph(info, normal_style))
-        story.append(Spacer(1, 6))
+    # Add embedding plot
+    if 'embedding' in images:
+        story.append(Paragraph("2D Embedding Plot", heading_style))
+        story.append(Paragraph("Shows the data structure in reduced dimensions using " + embedder + ".", normal_style))
+        img_buffer = io.BytesIO(images['embedding'])
+        img = Image(img_buffer, width=6*inch, height=4.5*inch)
+        story.append(img)
+        story.append(Spacer(1, 12))
     
-    # Add note about interactive visualizations
+    # Add model selection plot
+    if 'model_selection' in images:
+        story.append(Paragraph("Model Selection Analysis", heading_style))
+        story.append(Paragraph("Shows inertia (elbow method) and silhouette scores for different k values. The selected k is highlighted.", normal_style))
+        img_buffer = io.BytesIO(images['model_selection'])
+        img = Image(img_buffer, width=7*inch, height=4.2*inch)
+        story.append(img)
+        story.append(Spacer(1, 12))
+    
+    # Add clustering results plot
+    if 'clustering' in images:
+        story.append(Paragraph("Final Clustering Results", heading_style))
+        story.append(Paragraph("Shows the final cluster assignments on the 2D embedding. Each color represents a different cluster.", normal_style))
+        img_buffer = io.BytesIO(images['clustering'])
+        img = Image(img_buffer, width=6*inch, height=4.5*inch)
+        story.append(img)
+        story.append(Spacer(1, 12))
+    
+    # Add feature distributions plot
+    if 'feature_distributions' in images:
+        story.append(Paragraph("Feature Distributions by Cluster", heading_style))
+        story.append(Paragraph("Box plots showing how the most important features are distributed across different clusters.", normal_style))
+        img_buffer = io.BytesIO(images['feature_distributions'])
+        img = Image(img_buffer, width=7*inch, height=5*inch)
+        story.append(img)
+        story.append(Spacer(1, 12))
+    
+    # Add note about the report
     story.append(Spacer(1, 20))
-    story.append(Paragraph("Note", heading_style))
+    story.append(Paragraph("Report Summary", heading_style))
     story.append(Paragraph(
-        "This report contains the numerical results and summary of the clustering analysis. "
-        "The interactive visualizations (2D embeddings, model selection plots, feature distributions) "
-        "are displayed in the application interface and provide detailed insights into the clustering results.",
+        "This comprehensive report includes all numerical results, statistical summaries, and visualizations "
+        "from the clustering analysis. The visualizations above show the data structure, model selection process, "
+        "final clustering results, and feature distributions. This report provides a complete overview of the "
+        "clustering analysis for documentation, presentation, or further analysis purposes.",
         normal_style
     ))
     
