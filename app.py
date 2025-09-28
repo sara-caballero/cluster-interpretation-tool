@@ -300,28 +300,50 @@ if file:
                         preprocessed_data=preprocessed_data,
                         separator=sep_char,
                     )
+                    
+                    # Store results in session state for persistence
+                    st.session_state.clustering_results = results
+                    st.session_state.clustering_file_path = tmp_path
+                    st.session_state.clustering_target = target
+                    st.session_state.clustering_file_name = file.name
 
             st.success("Done!")
 
-            # Display feature importance table (moved before cluster summaries)
-            with st.expander("Top driver features (table)"):
-                st.dataframe(results["kmeans_drivers"])
+    # Display results if they exist in session state
+    if 'clustering_results' in st.session_state and st.session_state.clustering_results is not None:
+        results = st.session_state.clustering_results
+        tmp_path = st.session_state.clustering_file_path
+        target = st.session_state.clustering_target
+        file_name = st.session_state.clustering_file_name
+        
+        # Display feature importance table (moved before cluster summaries)
+        with st.expander("Top driver features (table)"):
+            st.dataframe(results["kmeans_drivers"])
 
-            # Display cluster summaries
-            st.subheader("Cluster summaries")
-            summaries = auto_describe_clusters(
-                results,
-                file_path=tmp_path,
-                target=target,
-                top_n=3
-            )
-            for s in summaries:
-                st.write("• " + s)
+        # Display cluster summaries
+        st.subheader("Cluster summaries")
+        summaries = auto_describe_clusters(
+            results,
+            file_path=tmp_path,
+            target=target,
+            top_n=3
+        )
+        for s in summaries:
+            st.write("• " + s)
 
-            # Download comprehensive PDF report
-            st.subheader("📥 Download Results")
+        # Download comprehensive PDF report
+        st.subheader("📥 Download Results")
+        
+        # Add clear results button
+        col1, col2 = st.columns([1, 1])
+        with col1:
             try:
                 from pipeline import generate_clustering_pdf
+                
+                # Get current preprocessing data if available
+                preprocessed_data = None
+                if 'preprocessed_data' in st.session_state:
+                    preprocessed_data = st.session_state.preprocessed_data
                 
                 pdf_data = generate_clustering_pdf(
                     results=results,
@@ -335,7 +357,7 @@ if file:
                     outlier_method=outlier_method,
                     contamination=contamination,
                     preprocessed_data=preprocessed_data,
-                    original_filename=file.name
+                    original_filename=file_name
                 )
                 
                 st.download_button(
@@ -348,6 +370,19 @@ if file:
                 st.error("PDF generation requires reportlab. Install with: pip install reportlab")
             except Exception as e:
                 st.error(f"Error generating PDF: {str(e)}")
+        
+        with col2:
+            if st.button("🗑️ Clear Results", help="Clear all clustering results and start over"):
+                # Clear clustering results from session state
+                if 'clustering_results' in st.session_state:
+                    del st.session_state.clustering_results
+                if 'clustering_file_path' in st.session_state:
+                    del st.session_state.clustering_file_path
+                if 'clustering_target' in st.session_state:
+                    del st.session_state.clustering_target
+                if 'clustering_file_name' in st.session_state:
+                    del st.session_state.clustering_file_name
+                st.rerun()
     else:
         st.info("Preprocess your data first before running clustering.")
 else:
