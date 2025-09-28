@@ -112,7 +112,7 @@ cluster_on_features = st.sidebar.checkbox("Cluster on full features (recommended
 k_selection = st.sidebar.radio("K selection method", ["Auto (silhouette + elbow)", "Manual override"], index=0)
 
 if k_selection == "Auto (silhouette + elbow)":
-    max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
+max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
     manual_k = None
 else:
     manual_k = st.sidebar.slider("Manual k value", 2, 15, 3)
@@ -121,13 +121,26 @@ else:
 outlier_method = st.sidebar.radio("Outlier removal", ["isoforest", "none"], index=0)
 contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01)
 
+# Feature re-weighting settings
+st.sidebar.markdown("### ⚖️ Feature Re-weighting")
+alpha = st.sidebar.slider(
+    "Categorical weight (α)", 
+    0.1, 3.0, 1.0, 0.1,
+    help="Weight for categorical features. Higher values give more importance to categorical variables."
+)
+beta = st.sidebar.slider(
+    "Numeric weight (β)", 
+    0.1, 3.0, 1.0, 0.1,
+    help="Weight for numeric features. Higher values give more importance to numeric variables."
+)
+
 # Documentation access
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📚 Documentation")
 if st.sidebar.button("📖 User Guide"):
-    st.session_state.show_user_guide_modal = True
+        st.session_state.show_user_guide_modal = True
 if st.sidebar.button("🔬 Technical Guide"):
-    st.session_state.show_technical_guide_modal = True
+        st.session_state.show_technical_guide_modal = True
 
 # Modal state management
 if 'show_user_guide_modal' not in st.session_state:
@@ -189,6 +202,8 @@ if file:
                         outlier_method=outlier_method,
                         contamination=contamination,
                         separator=sep_char,
+                        alpha=alpha,
+                        beta=beta,
                     )
                     st.session_state.preprocessed_data = preprocessed_info
 
@@ -299,6 +314,8 @@ if file:
                         contamination=contamination,
                         preprocessed_data=preprocessed_data,
                         separator=sep_char,
+                        alpha=alpha,
+                        beta=beta,
                     )
 
             st.success("Done!")

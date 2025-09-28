@@ -162,6 +162,8 @@ def preprocess_data(
     outlier_method="isoforest",
     contamination=0.03,
     separator=",",
+    alpha=1.0,
+    beta=1.0,
 ):
     """
     Preprocess data for clustering analysis.
@@ -204,6 +206,11 @@ def preprocess_data(
     for c in X_encoded.columns:
         if X_encoded[c].dtype == bool:
             X_encoded[c] = X_encoded[c].astype(float)
+    
+    # Feature re-weighting (balance categorical vs numeric)
+    if alpha != 1.0 or beta != 1.0:
+        print(f"Applying feature re-weighting: alpha={alpha}, beta={beta}")
+        X_encoded = reweight_features(X_encoded, X, alpha=alpha, beta=beta)
     
     # Feature scaling
     scaler_info = {"method": scaling, "per_feature": {}}
@@ -382,6 +389,45 @@ def format_categorical_comparison(cluster_pct, overall_pct):
         else:
             return f"{cluster_pct:.0f}% vs {overall_pct:.0f}% (much less common)"
 
+def reweight_features(X, original_df, alpha=1.0, beta=1.0):
+    """
+    Re-weights features to balance categorical vs numeric features.
+    
+    Args:
+        X: DataFrame with encoded features (after get_dummies)
+        original_df: Original DataFrame before encoding
+        alpha: Weight for categorical features (default 1.0)
+        beta: Weight for numeric features (default 1.0)
+    
+    Returns:
+        DataFrame with re-weighted features
+    """
+    import numpy as np
+    
+    X_weighted = X.copy()
+    
+    # Get original column names (before encoding)
+    original_cols = set(original_df.columns)
+    
+    # Process each original column
+    for col in original_cols:
+        if col in X_weighted.columns:
+            # Numeric column - multiply by beta
+            X_weighted[col] = X_weighted[col] * beta
+        else:
+            # Categorical column - find all its dummy columns
+            dummy_cols = [c for c in X_weighted.columns if c.startswith(col + '_')]
+            if dummy_cols:
+                # Calculate weight: alpha / sqrt(L-1) where L-1 is number of dummy columns
+                L_minus_1 = len(dummy_cols)
+                weight = alpha / np.sqrt(L_minus_1)
+                
+                # Apply weight to all dummy columns
+                for dummy_col in dummy_cols:
+                    X_weighted[dummy_col] = X_weighted[dummy_col] * weight
+    
+    return X_weighted
+
 def explain_clusters_numeric_original(raw_df, X_scaled, labels, scaler_info, top_n=5):
     """
     Calcula las características más importantes de cada cluster en unidades originales.
@@ -478,6 +524,8 @@ def run_pipeline(
     draw_sankey=False,
     preprocessed_data=None,
     separator=",",
+    alpha=1.0,
+    beta=1.0,
 ):
 
     # Handle preprocessed data or perform preprocessing
@@ -505,6 +553,11 @@ def run_pipeline(
         for c in X.columns:
             if X[c].dtype == bool:
                 X[c] = X[c].astype(float)
+
+        # Feature re-weighting (balance categorical vs numeric)
+        if alpha != 1.0 or beta != 1.0:
+            print(f"Applying feature re-weighting: alpha={alpha}, beta={beta}")
+            X = reweight_features(X, raw[feat_cols], alpha=alpha, beta=beta)
 
         # Feature scaling
         scaler_info = {"method": scaling, "per_feature": {}}
