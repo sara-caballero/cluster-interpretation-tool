@@ -6,6 +6,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import io
+import base64
+from datetime import datetime
 
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
@@ -13,6 +16,18 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import IsolationForest
+
+try:
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from PIL import Image as PILImage
+    HAS_REPORTLAB = True
+except ImportError:
+    HAS_REPORTLAB = False
 
 try:
     from umap import UMAP
@@ -680,6 +695,173 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
     for s in summaries:
         print(s)
     return summaries
+
+
+def generate_clustering_pdf(results, file_path=None, target=None, top_n=3, 
+                           scaling="minmax", embedder="PCA", manual_k=None, 
+                           max_k=None, outlier_method="none", contamination=0.03):
+    """
+    Generate a comprehensive PDF report of clustering results.
+    
+    Args:
+        results: Dictionary containing clustering results
+        file_path: Path to original CSV file
+        target: Target column name
+        top_n: Number of top features to highlight
+        scaling: Scaling method used
+        embedder: Embedding method used
+        manual_k: Manual k value if used
+        max_k: Maximum k value tested
+        outlier_method: Outlier removal method
+        contamination: Outlier contamination ratio
+    
+    Returns:
+        bytes: PDF content as bytes
+    """
+    if not HAS_REPORTLAB:
+        raise ImportError("reportlab is required for PDF generation. Install with: pip install reportlab")
+    
+    # Create PDF in memory
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, 
+                           topMargin=72, bottomMargin=18)
+    
+    # Get styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], 
+                                fontSize=16, spaceAfter=30, alignment=TA_CENTER)
+    heading_style = ParagraphStyle('CustomHeading', parent=styles['Heading2'], 
+                                  fontSize=14, spaceAfter=12, spaceBefore=12)
+    normal_style = styles['Normal']
+    
+    # Build PDF content
+    story = []
+    
+    # Title
+    story.append(Paragraph("Cluster Analysis Report", title_style))
+    story.append(Spacer(1, 12))
+    
+    # Report metadata
+    story.append(Paragraph("Report Information", heading_style))
+    metadata_data = [
+        ['Generated on:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')],
+        ['Original file:', file_path if file_path else 'Not specified'],
+        ['Scaling method:', scaling],
+        ['Embedding method:', embedder],
+        ['Outlier removal:', outlier_method],
+        ['Outlier contamination:', f"{contamination:.1%}" if outlier_method != "none" else "N/A"],
+    ]
+    
+    if manual_k is not None:
+        metadata_data.append(['K selection:', f'Manual (k={manual_k})'])
+    else:
+        metadata_data.append(['K selection:', f'Auto (max_k={max_k})'])
+    
+    metadata_table = Table(metadata_data, colWidths=[2*inch, 3*inch])
+    metadata_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('BACKGROUND', (1, 0), (1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    story.append(metadata_table)
+    story.append(Spacer(1, 20))
+    
+    # Data summary
+    story.append(Paragraph("Data Summary", heading_style))
+    X_scaled = results["X_scaled"]
+    labels = results["kmeans_labels"]
+    
+    summary_data = [
+        ['Total samples:', str(len(X_scaled))],
+        ['Total features:', str(len(X_scaled.columns))],
+        ['Number of clusters:', str(len(labels.unique()))],
+        ['Silhouette score:', f"{silhouette_score(X_scaled, labels):.3f}"],
+    ]
+    
+    # Add cluster sizes
+    cluster_sizes = labels.value_counts().sort_index()
+    for i, (cluster_id, size) in enumerate(cluster_sizes.items()):
+        summary_data.append([f'Cluster {cluster_id} size:', str(size)])
+    
+    summary_table = Table(summary_data, colWidths=[2*inch, 1*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('BACKGROUND', (1, 0), (1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 20))
+    
+    # Cluster interpretations
+    story.append(Paragraph("Cluster Interpretations", heading_style))
+    summaries = auto_describe_clusters(results, file_path, target, top_n)
+    
+    for summary in summaries:
+        story.append(Paragraph(summary, normal_style))
+        story.append(Spacer(1, 6))
+    
+    story.append(Spacer(1, 20))
+    
+    # Feature importance table
+    story.append(Paragraph("Top Driver Features", heading_style))
+    drivers = results["kmeans_drivers"]
+    
+    if not drivers.empty:
+        # Create table data
+        table_data = [['Cluster', 'Feature', 'Direction', 'Z-Score', 'Cluster Median', 'Overall Median']]
+        
+        for cluster_id in sorted(drivers['cluster'].unique()):
+            cluster_drivers = drivers[drivers['cluster'] == cluster_id].head(top_n)
+            for _, row in cluster_drivers.iterrows():
+                table_data.append([
+                    str(int(row['cluster'])),
+                    row['feature'],
+                    row['direction'],
+                    f"{row['z_median']:.2f}",
+                    f"{row['cluster_median']:.2f}",
+                    f"{row['overall_median']:.2f}"
+                ])
+        
+        drivers_table = Table(table_data, colWidths=[0.8*inch, 1.5*inch, 0.8*inch, 0.8*inch, 1*inch, 1*inch])
+        drivers_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(drivers_table)
+    
+    story.append(Spacer(1, 20))
+    
+    # Add note about visualizations
+    story.append(Paragraph("Note", heading_style))
+    story.append(Paragraph(
+        "This report contains the numerical results of the clustering analysis. "
+        "For visualizations (2D embeddings, model selection plots, feature distributions), "
+        "please refer to the interactive plots displayed in the application interface.",
+        normal_style
+    ))
+    
+    # Build PDF
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 

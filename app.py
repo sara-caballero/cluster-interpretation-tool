@@ -112,7 +112,7 @@ cluster_on_features = st.sidebar.checkbox("Cluster on full features (recommended
 k_selection = st.sidebar.radio("K selection method", ["Auto (silhouette + elbow)", "Manual override"], index=0)
 
 if k_selection == "Auto (silhouette + elbow)":
-    max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
+max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
     manual_k = None
 else:
     manual_k = st.sidebar.slider("Manual k value", 2, 15, 3)
@@ -125,9 +125,9 @@ contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📚 Documentation")
 if st.sidebar.button("📖 User Guide"):
-    st.session_state.show_user_guide_modal = True
+        st.session_state.show_user_guide_modal = True
 if st.sidebar.button("🔬 Technical Guide"):
-    st.session_state.show_technical_guide_modal = True
+        st.session_state.show_technical_guide_modal = True
 
 # Modal state management
 if 'show_user_guide_modal' not in st.session_state:
@@ -314,14 +314,34 @@ if file:
             for s in summaries:
                 st.write("• " + s)
 
-            # Export cluster assignments
-            labels = results["kmeans_labels"].rename("Cluster").to_frame()
-            st.download_button(
-                "⬇️ Download cluster assignments (CSV)",
-                data=labels.to_csv(index=True).encode("utf-8"),
-                file_name="cluster_assignments.csv",
-                mime="text/csv",
-            )
+            # Download comprehensive PDF report
+            st.subheader("📥 Download Results")
+            try:
+                from pipeline import generate_clustering_pdf
+                
+                pdf_data = generate_clustering_pdf(
+                    results=results,
+                    file_path=tmp_path,
+                    target=target,
+                    top_n=3,
+                    scaling=scaling,
+                    embedder=embedder,
+                    manual_k=manual_k,
+                    max_k=max_k,
+                    outlier_method=outlier_method,
+                    contamination=contamination
+                )
+                
+                st.download_button(
+                    "📄 Download full report (PDF)",
+                    data=pdf_data,
+                    file_name="clustering_analysis_report.pdf",
+                    mime="application/pdf",
+                )
+            except ImportError:
+                st.error("PDF generation requires reportlab. Install with: pip install reportlab")
+            except Exception as e:
+                st.error(f"Error generating PDF: {str(e)}")
 
             # Display feature importance table
             with st.expander("Top driver features (table)"):
