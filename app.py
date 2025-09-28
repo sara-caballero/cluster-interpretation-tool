@@ -112,7 +112,7 @@ cluster_on_features = st.sidebar.checkbox("Cluster on full features (recommended
 k_selection = st.sidebar.radio("K selection method", ["Auto (silhouette + elbow)", "Manual override"], index=0)
 
 if k_selection == "Auto (silhouette + elbow)":
-max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
+    max_k = st.sidebar.slider("Max k to try", 2, 15, 8)
     manual_k = None
 else:
     manual_k = st.sidebar.slider("Manual k value", 2, 15, 3)
@@ -125,9 +125,9 @@ contamination = st.sidebar.slider("Outlier contamination", 0.0, 0.10, 0.03, 0.01
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📚 Documentation")
 if st.sidebar.button("📖 User Guide"):
-        st.session_state.show_user_guide_modal = True
+    st.session_state.show_user_guide_modal = True
 if st.sidebar.button("🔬 Technical Guide"):
-        st.session_state.show_technical_guide_modal = True
+    st.session_state.show_technical_guide_modal = True
 
 # Modal state management
 if 'show_user_guide_modal' not in st.session_state:
