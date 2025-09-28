@@ -141,20 +141,7 @@ if not auto_balance:
         help="Weight for numeric features. Higher values give more importance to numeric variables."
     )
 else:
-    # Show auto-calculated values if available
-    if 'preprocessed_data' in st.session_state and 'weights_info' in st.session_state.preprocessed_data:
-        weights_info = st.session_state.preprocessed_data['weights_info']
-        if weights_info['auto_balance']:
-            st.sidebar.success(f"**Auto-calculated weights:**")
-            st.sidebar.write(f"α = {weights_info['alpha']:.1f}")
-            st.sidebar.write(f"β = {weights_info['beta']:.1f}")
-            st.sidebar.write(f"*Ratio: {weights_info['n_dummy']} dummy / {weights_info['n_num']} numeric = {weights_info['ratio']:.2f}*")
-        else:
-            st.sidebar.info("🔧 Weights will be calculated automatically based on your data structure")
-    else:
-        st.sidebar.info("🔧 Weights will be calculated automatically based on your data structure")
-    
-    # Placeholder values - will be updated after preprocessing
+    # Default values when auto-balance is enabled
     alpha = 0.7
     beta = 1.3
 
@@ -235,15 +222,6 @@ if file:
         with col2:
             if st.session_state.preprocessed_data is not None:
                 st.success("Data is preprocessed and ready for clustering!")
-                
-                # Show calculated weights if auto-balance was used
-                if 'weights_info' in st.session_state.preprocessed_data:
-                    weights_info = st.session_state.preprocessed_data['weights_info']
-                    if weights_info['auto_balance']:
-                        st.info(f"🔧 **Auto-calculated weights:** α={weights_info['alpha']:.1f}, β={weights_info['beta']:.1f} "
-                               f"(ratio: {weights_info['n_dummy']} dummy / {weights_info['n_num']} numeric = {weights_info['ratio']:.2f})")
-                    else:
-                        st.info(f"🔧 **Manual weights:** α={weights_info['alpha']:.1f}, β={weights_info['beta']:.1f}")
     else:
         # Clean up preprocessed data when not needed
         if 'preprocessed_data' in st.session_state:
