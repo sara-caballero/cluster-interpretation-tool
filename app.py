@@ -341,7 +341,7 @@ if file:
             st.subheader("Cluster summaries")
             summaries = auto_describe_clusters(
                 results,
-                file_path=tmp_path,
+                file_path=None,  # Use raw_data from results instead
                 target=target,
                 top_n=3
             )

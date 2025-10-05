@@ -915,11 +915,17 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
     target_binary = None
     overall_pct_1 = None  # overall % of class 1.0
 
-    if file_path is not None and target is not None:
-        raw = pd.read_csv(file_path)
-        raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
-
-        if target in raw.columns:
+    if target is not None:
+        # Use raw_data from results if available, otherwise read from file
+        if "raw_data" in results:
+            raw = results["raw_data"].loc[labels.index].copy()
+        elif file_path is not None:
+            raw = pd.read_csv(file_path)
+            raw = raw.loc[labels.index].copy()  # align with rows used after outlier removal
+        else:
+            raw = None
+            
+        if raw is not None and target in raw.columns:
             ser = raw[target]
 
             # Convert to binary format
@@ -941,13 +947,10 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
                 overall_pct_1 = 100.0 * (target_binary == 1.0).mean()
 
     # Reconstruir información de características originales
-    raw = None
     binary_features = {}
     
-    if file_path is not None:
-        raw = pd.read_csv(file_path)
-        raw = raw.loc[labels.index].copy()
-        
+    # Use the same raw data we used for target processing
+    if raw is not None:
         # Identificar características binarias
         for feat in raw.columns:
             unique_vals = raw[feat].dropna().unique()
