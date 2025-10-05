@@ -925,7 +925,8 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
             # Convert to binary format
             if pd.api.types.is_numeric_dtype(ser):
                 uniq = pd.unique(ser.dropna())
-                if len(uniq) == 2 and set(np.sort(uniq)) <= {0, 1} | {0.0, 1.0}:
+                # Check if values are binary (0/1 or 0.0/1.0)
+                if len(uniq) == 2 and set(uniq).issubset({0, 1, 0.0, 1.0}):
                     target_binary = ser.astype(float)
             else:
                 # Map categorical to binary
