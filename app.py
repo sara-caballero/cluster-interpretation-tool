@@ -20,7 +20,7 @@ if (qp.get("ping") == ["1"]) or (qp.get("ping") == "1"):
 
 
 # Import pipeline functions
-from pipeline import run_pipeline, auto_describe_clusters, preprocess_data
+from pipeline import run_pipeline, auto_describe_clusters, preprocess_data, generate_medoid_visualizations
 
 st.set_page_config(page_title="Cluster Interpretation Tool", layout="wide")
 st.title("🔍 Cluster Interpretation Tool")
@@ -356,6 +356,18 @@ if file:
             )
             for s in summaries:
                 st.write("• " + s)
+
+            # Display medoid visualizations
+            st.markdown("---")
+            try:
+                medoids_df = generate_medoid_visualizations(
+                    results,
+                    file_path=tmp_path,
+                    target=target
+                )
+            except Exception as e:
+                st.error(f"Error generating medoid visualizations: {str(e)}")
+                st.info("Medoid visualizations require plotly. Install with: pip install plotly")
 
             # Download comprehensive PDF report
             st.subheader("📥 Download Results")

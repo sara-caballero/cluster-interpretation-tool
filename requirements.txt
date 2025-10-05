@@ -7,3 +7,5 @@ seaborn>=0.12
 umap-learn>=0.5     # optional; app still works if missing but UMAP needs it
 reportlab>=4.0      # for PDF generation
 Pillow>=9.0         # for image handling in PDF
+plotly>=5.0         # for medoid visualizations
+scipy>=1.9          # for distance calculations in medoid computation
