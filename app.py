@@ -153,6 +153,16 @@ if st.sidebar.button("📖 User Guide"):
 if st.sidebar.button("🔬 Technical Guide"):
         st.session_state.show_technical_guide_modal = True
 
+# Footer in sidebar
+st.sidebar.markdown("---")
+st.sidebar.markdown(
+    '<div style="text-align: center; font-size: 0.7em; color: #888; margin-top: 1rem;">'
+    'Developed during a research visit at the University of Greenwich<br>'
+    'with guidance from Prof. C. Walshaw'
+    '</div>',
+    unsafe_allow_html=True
+)
+
 # Modal state management
 if 'show_user_guide_modal' not in st.session_state:
     st.session_state.show_user_guide_modal = False
@@ -382,13 +392,3 @@ if file:
         st.info("Preprocess your data first before running clustering.")
 else:
     st.info("Upload a CSV to get started.")
-
-# Footer
-st.markdown("---")
-st.markdown(
-    '<div style="text-align: center; font-size: 0.8em; color: #666; margin-top: 2rem;">'
-    'Developed during a research visit at the University of Greenwich<br>'
-    'with guidance from Prof. C. Walshaw'
-    '</div>',
-    unsafe_allow_html=True
-)
