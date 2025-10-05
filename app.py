@@ -341,7 +341,7 @@ if file:
             st.subheader("Cluster summaries")
             summaries = auto_describe_clusters(
                 results,
-                file_path=None,  # Use raw_data from results instead
+                file_path=tmp_path,
                 target=target,
                 top_n=3
             )
@@ -382,3 +382,13 @@ if file:
         st.info("Preprocess your data first before running clustering.")
 else:
     st.info("Upload a CSV to get started.")
+
+# Footer
+st.markdown("---")
+st.markdown(
+    '<div style="text-align: center; font-size: 0.8em; color: #666; margin-top: 2rem;">'
+    'Developed during a research visit at the University of Greenwich<br>'
+    'with guidance from Prof. C. Walshaw'
+    '</div>',
+    unsafe_allow_html=True
+)
