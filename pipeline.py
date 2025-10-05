@@ -490,7 +490,10 @@ def select_headline_numeric_features(drivers, raw_df, labels, k, max_features=6)
         if not cluster_drivers.empty:
             # Sort by absolute z-score and take top features
             sort_col = 'z_score' if 'z_score' in cluster_drivers.columns else 'z_median'
-            top_cluster = cluster_drivers.nlargest(3, sort_col, key=lambda x: x.abs())
+            # Create absolute values for sorting (compatible with older pandas)
+            cluster_drivers_sorted = cluster_drivers.copy()
+            cluster_drivers_sorted['abs_score'] = cluster_drivers_sorted[sort_col].abs()
+            top_cluster = cluster_drivers_sorted.nlargest(3, 'abs_score')
             top_drivers.extend(top_cluster['feature'].tolist())
     
     # Filter to numeric features only

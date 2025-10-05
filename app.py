@@ -365,9 +365,12 @@ if file:
                     file_path=tmp_path,
                     target=target
                 )
+            except ImportError as e:
+                st.error(f"Missing dependency: {str(e)}")
+                st.info("Medoid visualizations require plotly and scipy. Install with: pip install plotly scipy")
             except Exception as e:
                 st.error(f"Error generating medoid visualizations: {str(e)}")
-                st.info("Medoid visualizations require plotly. Install with: pip install plotly")
+                st.info("This might be due to insufficient data or missing dependencies. Check that plotly and scipy are installed.")
 
             # Download comprehensive PDF report
             st.subheader("📥 Download Results")
