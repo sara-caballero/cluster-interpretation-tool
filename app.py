@@ -154,12 +154,14 @@ if st.sidebar.button("🔬 Technical Guide"):
         st.session_state.show_technical_guide_modal = True
 
 # Footer in sidebar
-st.sidebar.markdown("---")
 st.sidebar.markdown(
-    '<div style="text-align: center; font-size: 0.7em; color: #888; margin-top: 1rem;">'
-    'Developed during a research visit at the University of Greenwich<br>'
-    'with guidance from Prof. C. Walshaw'
-    '</div>',
+    """
+    ---
+    <div style='text-align: center; font-size: 0.9em; color: gray;'>
+    Developed during a research visit at the <b>University of Greenwich</b><br>
+    with guidance from <b>Prof. C. Walshaw</b>
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
