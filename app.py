@@ -352,7 +352,7 @@ if file:
                 results,
                 file_path=tmp_path,
                 target=target,
-                top_n=3
+                top_n=5
             )
             for s in summaries:
                 st.write("• " + s)
@@ -366,7 +366,7 @@ if file:
                     results=results,
                     file_path=tmp_path,
                     target=target,
-                    top_n=3,
+                    top_n=5,
                     scaling=scaling,
                     embedder=embedder,
                     manual_k=manual_k,
