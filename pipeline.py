@@ -940,6 +940,7 @@ def run_pipeline(
         "kmeans_model": km_final,
         "kmeans_drivers": drivers_km,
         "raw_data": raw,  # Include raw data for PDF generation
+        "target": target,  # Include target for PDF generation
     }
     
     # Add original units drivers if available
@@ -1102,7 +1103,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
     return summaries
 
 
-def generate_visualization_images(results, embedder="PCA", manual_k=None, max_k=None):
+def generate_visualization_images(results, embedder="PCA", manual_k=None, max_k=None, target=None):
     """
     Generate visualization images for PDF inclusion with enhanced styling.
     
@@ -1367,6 +1368,86 @@ def generate_visualization_images(results, embedder="PCA", manual_k=None, max_k=
             images['feature_distributions'] = buffer.getvalue()
             plt.close()
         
+        # 5. Target vs Cluster Analysis (if target is available)
+        if target is not None:
+            raw_data = results.get('raw_data')
+            
+            if raw_data is not None and target in raw_data.columns:
+                # Create target vs cluster analysis
+                df_k = raw_data.loc[labels.index].copy()
+                df_k["Cluster"] = labels.values
+                
+                # Handle different target types
+                target_series = df_k[target]
+                
+                # Convert to binary if possible for cleaner visualization
+                if pd.api.types.is_numeric_dtype(target_series):
+                    unique_vals = target_series.dropna().unique()
+                    if len(unique_vals) == 2 and set(np.sort(unique_vals)) <= {0, 1} | {0.0, 1.0}:
+                        # Binary numeric target
+                        tab = df_k.groupby("Cluster")[target].value_counts(normalize=True).unstack()
+                    else:
+                        # Multi-class numeric target - show top categories
+                        tab = df_k.groupby("Cluster")[target].value_counts(normalize=True).unstack()
+                        # Keep only top 5 categories for readability
+                        if tab.shape[1] > 5:
+                            top_categories = tab.sum().nlargest(5).index
+                            tab = tab[top_categories]
+                else:
+                    # Categorical target
+                    unique_vals = target_series.dropna().unique()
+                    if len(unique_vals) == 2:
+                        # Binary categorical - convert to 0/1
+                        u_sorted = np.sort(unique_vals.astype(str))
+                        mapping = {u_sorted[0]: 0.0, u_sorted[1]: 1.0}
+                        df_k[target + '_binary'] = target_series.astype(str).map(mapping).astype(float)
+                        tab = df_k.groupby("Cluster")[target + '_binary'].value_counts(normalize=True).unstack()
+                    else:
+                        # Multi-class categorical
+                        tab = df_k.groupby("Cluster")[target].value_counts(normalize=True).unstack()
+                        # Keep only top 5 categories for readability
+                        if tab.shape[1] > 5:
+                            top_categories = tab.sum().nlargest(5).index
+                            tab = tab[top_categories]
+                
+                if not tab.empty:
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    
+                    # Create enhanced heatmap
+                    im = ax.imshow(tab.values, cmap='RdYlBu_r', aspect='auto', vmin=0, vmax=1)
+                    
+                    # Set ticks and labels
+                    ax.set_xticks(range(len(tab.columns)))
+                    ax.set_yticks(range(len(tab.index)))
+                    ax.set_xticklabels([str(col) for col in tab.columns], fontsize=THEME.BODY_SIZE)
+                    ax.set_yticklabels([f'Cluster {idx}' for idx in tab.index], fontsize=THEME.BODY_SIZE)
+                    
+                    # Add text annotations
+                    for i in range(len(tab.index)):
+                        for j in range(len(tab.columns)):
+                            value = tab.iloc[i, j]
+                            if not pd.isna(value):
+                                text_color = 'white' if value > 0.5 else 'black'
+                                ax.text(j, i, f'{value:.2f}', ha='center', va='center',
+                                       color=text_color, fontsize=THEME.BODY_SIZE, fontweight='bold')
+                    
+                    # Apply theme styling
+                    apply_theme(ax, title=f"Target vs KMeans Cluster")
+                    ax.set_xlabel(f"{prettify_name(target)}", fontsize=THEME.BODY_SIZE)
+                    ax.set_ylabel("Cluster", fontsize=THEME.BODY_SIZE)
+                    
+                    # Add colorbar
+                    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+                    cbar.set_label('Proportion', fontsize=THEME.BODY_SIZE)
+                    cbar.ax.tick_params(labelsize=THEME.BODY_SIZE)
+                    
+                    buffer = io.BytesIO()
+                    plt.savefig(buffer, format='png', dpi=THEME.DPI, bbox_inches='tight',
+                               facecolor='white', edgecolor='none')
+                    buffer.seek(0)
+                    images['target_vs_cluster'] = buffer.getvalue()
+                    plt.close()
+        
     except Exception as e:
         print(f"Error generating visualization images: {e}")
     
@@ -1517,7 +1598,7 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
     story.append(Paragraph("Visualizations", heading_style))
     
     # Generate visualization images
-    images = generate_visualization_images(results, embedder, manual_k, max_k)
+    images = generate_visualization_images(results, embedder, manual_k, max_k, target)
     
     # Add embedding plot
     if 'embedding' in images:
@@ -1549,9 +1630,18 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
     # Add feature distributions plot
     if 'feature_distributions' in images:
         story.append(Paragraph("Feature Distributions by Cluster", heading_style))
-        story.append(Paragraph("Box plots showing how the most important features are distributed across different clusters.", normal_style))
+        story.append(Paragraph("Enhanced violin+box plots showing how the most important features are distributed across different clusters.", normal_style))
         img_buffer = io.BytesIO(images['feature_distributions'])
         img = Image(img_buffer, width=7*inch, height=5*inch)
+        story.append(img)
+        story.append(Spacer(1, 12))
+    
+    # Add target vs cluster analysis (if available)
+    if 'target_vs_cluster' in images:
+        story.append(Paragraph("Target vs KMeans Cluster", heading_style))
+        story.append(Paragraph("Heatmap showing the distribution of target variable values across different clusters.", normal_style))
+        img_buffer = io.BytesIO(images['target_vs_cluster'])
+        img = Image(img_buffer, width=6*inch, height=4.5*inch)
         story.append(img)
         story.append(Spacer(1, 12))
     
