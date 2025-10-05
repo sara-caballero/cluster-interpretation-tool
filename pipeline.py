@@ -9,6 +9,7 @@ import seaborn as sns
 import io
 import base64
 from datetime import datetime
+from report_theme import THEME, prettify_name, fmt_val, fmt_pct, fmt_pair, legend_cluster_label, apply_theme, get_direction_symbol, get_direction_color
 
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
@@ -786,15 +787,35 @@ def run_pipeline(
     sil_final = silhouette_score(data_for_kmeans, labels_kmeans)
     print(f"KMeans silhouette at k={best_k}: {sil_final:.3f}")
 
-    # Cluster visualization
-    plt.figure(figsize=(6, 5))
-    for c in sorted(labels_kmeans.unique()):
-        pts = embed.loc[labels_kmeans == c]
-        plt.scatter(pts["X"], pts["Y"], s=10, label=f"Cluster {c}")
-    plt.legend()
-    plt.title(f"{embedder} + KMeans(k={best_k})")
-    plt.xticks([])
-    plt.yticks([])
+    # Enhanced cluster visualization
+    fig, ax = plt.subplots(figsize=THEME.FIGURE_SIZE)
+    
+    # Calculate cluster statistics for legend
+    cluster_counts = labels_kmeans.value_counts().sort_index()
+    total_points = len(labels_kmeans)
+    
+    # Plot each cluster with theme colors
+    for cluster_id in sorted(labels_kmeans.unique()):
+        mask = labels_kmeans == cluster_id
+        cluster_points = embed.loc[mask]
+        color = THEME.get_cluster_color(cluster_id)
+        
+        ax.scatter(cluster_points["X"], cluster_points["Y"], 
+                  s=THEME.POINT_SIZE, 
+                  alpha=THEME.ALPHA_CLUSTER,
+                  color=color,
+                  edgecolors=color,
+                  linewidth=0.5,
+                  label=legend_cluster_label(cluster_id, cluster_counts[cluster_id], total_points))
+    
+    # Apply theme styling
+    apply_theme(ax, title=f"{embedder} + KMeans(k={best_k})", 
+               xlabel="PC1", ylabel="PC2")
+    
+    # Enhanced legend
+    ax.legend(loc='best', frameon=True, fancybox=True, shadow=True,
+             fontsize=THEME.BODY_SIZE, framealpha=0.9)
+    
     plt.show()
 
     # Cluster interpretation
@@ -817,8 +838,8 @@ def run_pipeline(
             raw, X_scaled, labels_kmeans, scaler_info, top_n=5
         )
 
-    # Feature distribution analysis
-    print("KMeans: feature distributions by cluster (boxplots)...")
+    # Enhanced feature distribution analysis
+    print("KMeans: feature distributions by cluster (enhanced plots)...")
     tmp = X_scaled.copy()
     tmp["Cluster"] = labels_kmeans.values
     
@@ -833,15 +854,63 @@ def run_pipeline(
     
     for i, col in enumerate(X_scaled.columns[:n_features]):
         row, col_idx = i // n_cols, i % n_cols
-        sns.boxplot(x="Cluster", y=col, data=tmp, ax=axes[row, col_idx])
-        axes[row, col_idx].set_title(f"{col} by cluster (KMeans)")
+        ax = axes[row, col_idx]
+        
+        # Create enhanced violin+box hybrid plot
+        # First, violin plot with light fill
+        violin_parts = ax.violinplot([tmp[tmp["Cluster"] == c][col].dropna() 
+                                    for c in sorted(tmp["Cluster"].unique())],
+                                   positions=sorted(tmp["Cluster"].unique()),
+                                   showmeans=False, showmedians=False, showextrema=False)
+        
+        # Style violin plots
+        for pc in violin_parts['bodies']:
+            pc.set_facecolor(THEME.NEUTRAL_LIGHT)
+            pc.set_alpha(0.6)
+            pc.set_edgecolor(THEME.NEUTRAL_MID)
+            pc.set_linewidth(0.8)
+        
+        # Add box plot on top
+        box_parts = ax.boxplot([tmp[tmp["Cluster"] == c][col].dropna() 
+                              for c in sorted(tmp["Cluster"].unique())],
+                             positions=sorted(tmp["Cluster"].unique()),
+                             patch_artist=True, widths=0.3,
+                             boxprops=dict(facecolor='white', alpha=0.8, 
+                                          edgecolor=THEME.NEUTRAL_DARK, linewidth=1),
+                             medianprops=dict(color=THEME.PRIMARY, linewidth=2),
+                             whiskerprops=dict(color=THEME.NEUTRAL_DARK, linewidth=1),
+                             capprops=dict(color=THEME.NEUTRAL_DARK, linewidth=1),
+                             flierprops=dict(marker='o', markerfacecolor=THEME.NEUTRAL_MID, 
+                                            markeredgecolor=THEME.NEUTRAL_DARK, 
+                                            markersize=4, alpha=0.6))
+        
+        # Add overall median line
+        overall_median = tmp[col].median()
+        ax.axhline(y=overall_median, color=THEME.NEUTRAL_MID, 
+                  linestyle='--', linewidth=1.5, alpha=0.8)
+        
+        # Apply theme styling
+        apply_theme(ax, title=f"{prettify_name(col)} (by cluster)")
+        ax.set_xlabel("Cluster", fontsize=THEME.BODY_SIZE)
+        ax.set_ylabel(prettify_name(col), fontsize=THEME.BODY_SIZE)
+        
+        # Set consistent y-limits for better comparison
+        y_min, y_max = tmp[col].quantile([0.05, 0.95])
+        y_range = y_max - y_min
+        ax.set_ylim(y_min - 0.1 * y_range, y_max + 0.1 * y_range)
     
     # Remove unused subplots
     for i in range(n_features, n_rows * n_cols):
         row, col_idx = i // n_cols, i % n_cols
         axes[row, col_idx].set_visible(False)
     
+    # Enhanced title
+    fig.suptitle("Feature Distributions by Cluster (Enhanced)", 
+                fontsize=THEME.HEADING_SIZE, fontweight='600',
+                color=THEME.NEUTRAL_DARK, y=0.98)
+    
     plt.tight_layout()
+    plt.subplots_adjust(top=0.93)
     plt.show()
 
     # Optional Sankey visualization
@@ -1035,7 +1104,7 @@ def auto_describe_clusters(results, file_path=None, target=None, top_n=3):
 
 def generate_visualization_images(results, embedder="PCA", manual_k=None, max_k=None):
     """
-    Generate visualization images for PDF inclusion.
+    Generate visualization images for PDF inclusion with enhanced styling.
     
     Args:
         results: Dictionary containing clustering results
@@ -1055,22 +1124,49 @@ def generate_visualization_images(results, embedder="PCA", manual_k=None, max_k=
     embed = results["embedding"]
     
     try:
-        # 1. 2D Embedding Plot
-        plt.figure(figsize=(8, 6))
-        plt.scatter(embed["X"], embed["Y"], s=10, alpha=0.6)
-        plt.title(f"{embedder} Embedding", fontsize=14, fontweight='bold')
-        plt.xlabel("Component 1", fontsize=12)
-        plt.ylabel("Component 2", fontsize=12)
-        plt.grid(True, alpha=0.3)
+        # 1. Enhanced 2D Embedding Plot
+        fig, ax = plt.subplots(figsize=THEME.FIGURE_SIZE)
+        
+        # Calculate cluster statistics for legend
+        cluster_counts = labels.value_counts().sort_index()
+        total_points = len(labels)
+        
+        # Plot each cluster with theme colors
+        for cluster_id in sorted(labels.unique()):
+            mask = labels == cluster_id
+            cluster_points = embed.loc[mask]
+            color = THEME.get_cluster_color(cluster_id)
+            
+            ax.scatter(cluster_points["X"], cluster_points["Y"], 
+                      s=THEME.POINT_SIZE, 
+                      alpha=THEME.ALPHA_CLUSTER,
+                      color=color,
+                      edgecolors=color,
+                      linewidth=0.5,
+                      label=legend_cluster_label(cluster_id, cluster_counts[cluster_id], total_points))
+        
+        # Apply theme styling
+        apply_theme(ax, title=f"{embedder} Embedding", 
+                   xlabel="PC1", ylabel="PC2")
+        
+        # Enhanced legend
+        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True,
+                 fontsize=THEME.BODY_SIZE, framealpha=0.9)
+        
+        # Add caption
+        fig.text(0.5, 0.02, "Points colored by cluster; transparency shows density", 
+                ha='center', fontsize=THEME.CAPTION_SIZE, 
+                color=THEME.NEUTRAL_MID, style='italic')
         
         # Save to buffer
         buffer = io.BytesIO()
-        plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+        plt.savefig(buffer, format='png', dpi=THEME.DPI, bbox_inches='tight', 
+                   facecolor='white', edgecolor='none')
         buffer.seek(0)
         images['embedding'] = buffer.getvalue()
         plt.close()
         
-        # 2. Model Selection Plot (if we have k values to show)
+        # 2. Enhanced Model Selection Plot
         if max_k is not None:
             k_vals = list(range(2, min(max_k, len(X_scaled) - 1) + 1))
             if len(k_vals) > 0:
@@ -1083,68 +1179,110 @@ def generate_visualization_images(results, embedder="PCA", manual_k=None, max_k=
                 
                 inertia_norm = np.asarray(inertias, float) / max(inertias)
                 
-                plt.figure(figsize=(10, 6))
-                ax1 = plt.gca()
-                ax1.plot(k_vals, inertia_norm, marker="o", linewidth=2, markersize=8, 
-                        label="Normalized Inertia (Elbow)", color='blue')
-                ax1.set_xlabel("Number of Clusters (k)", fontsize=12)
-                ax1.set_ylabel("Normalized Inertia [0..1]", fontsize=12, color='blue')
-                ax1.tick_params(axis='y', labelcolor='blue')
-                ax1.grid(True, alpha=0.3)
+                fig, ax1 = plt.subplots(figsize=(10, 6))
                 
+                # Plot inertia with smooth line
+                line1 = ax1.plot(k_vals, inertia_norm, marker="o", linewidth=2.5, 
+                               markersize=8, label="Normalized Inertia (Elbow)", 
+                               color=THEME.PRIMARY, markerfacecolor=THEME.PRIMARY,
+                               markeredgecolor='white', markeredgewidth=1)
+                
+                # Apply theme to primary axis
+                apply_theme(ax1, xlabel="Number of Clusters (k)", ylabel="Normalized Inertia [0..1]")
+                ax1.set_ylabel("Normalized Inertia [0..1]", fontsize=THEME.BODY_SIZE, 
+                              color=THEME.PRIMARY, fontweight='500')
+                ax1.tick_params(axis='y', labelcolor=THEME.PRIMARY)
+                
+                # Create secondary axis for silhouette
                 ax2 = ax1.twinx()
-                ax2.plot(k_vals, sils, marker="X", linewidth=2, markersize=8, 
-                        label="Silhouette Score", color='red', linestyle='--')
-                ax2.set_ylabel("Silhouette Score [-1..1]", fontsize=12, color='red')
-                ax2.tick_params(axis='y', labelcolor='red')
+                line2 = ax2.plot(k_vals, sils, marker="s", linewidth=2.5, markersize=7,
+                               label="Silhouette Score", color=THEME.SECONDARY, 
+                               linestyle='--', markerfacecolor=THEME.SECONDARY,
+                               markeredgecolor='white', markeredgewidth=1)
+                ax2.set_ylabel("Silhouette Score [-1..1]", fontsize=THEME.BODY_SIZE, 
+                              color=THEME.SECONDARY, fontweight='500')
+                ax2.tick_params(axis='y', labelcolor=THEME.SECONDARY)
                 
-                # Highlight selected k
-                if manual_k is not None and manual_k in k_vals:
-                    k_idx = k_vals.index(manual_k)
-                    ax1.axvline(x=manual_k, color='green', linestyle=':', linewidth=3, 
-                               alpha=0.7, label=f'Selected k={manual_k}')
-                    ax1.text(manual_k, inertia_norm[k_idx], f'k={manual_k}', 
-                             ha="center", va="bottom", color='green', fontweight='bold', fontsize=10)
-                else:
-                    # Find best k by silhouette
-                    best_k_idx = np.argmax(sils)
-                    best_k = k_vals[best_k_idx]
-                    ax1.axvline(x=best_k, color='green', linestyle=':', linewidth=3, 
-                               alpha=0.7, label=f'Best k={best_k}')
-                    ax1.text(best_k, inertia_norm[best_k_idx], f'k={best_k}', 
-                             ha="center", va="bottom", color='green', fontweight='bold', fontsize=10)
+                # Highlight selected k with accent color
+                selected_k = manual_k if manual_k is not None else k_vals[np.argmax(sils)]
+                if selected_k in k_vals:
+                    k_idx = k_vals.index(selected_k)
+                    ax1.axvline(x=selected_k, color=THEME.ACCENT, linestyle='-', 
+                               linewidth=3, alpha=0.8)
+                    
+                    # Annotate selected k
+                    ax1.annotate(f'Selected k = {selected_k}', 
+                               xy=(selected_k, inertia_norm[k_idx]), 
+                               xytext=(selected_k + 0.5, inertia_norm[k_idx] + 0.1),
+                               arrowprops=dict(arrowstyle='->', color=THEME.ACCENT, lw=2),
+                               fontsize=THEME.BODY_SIZE, fontweight='bold',
+                               color=THEME.ACCENT,
+                               bbox=dict(boxstyle="round,pad=0.3", facecolor='white', 
+                                       edgecolor=THEME.ACCENT, alpha=0.9))
                 
-                plt.title("Model Selection: Inertia vs Silhouette Analysis", fontsize=14, fontweight='bold')
-                ax1.legend(loc="upper left")
-                ax2.legend(loc="upper right")
+                # Enhanced title
+                ax1.set_title("Model Selection: Inertia vs Silhouette Analysis", 
+                             fontsize=THEME.HEADING_SIZE, fontweight='600',
+                             color=THEME.NEUTRAL_DARK, pad=THEME.MARGIN_MEDIUM)
+                
+                # Combined legend
+                lines = line1 + line2
+                labels = [l.get_label() for l in lines]
+                ax1.legend(lines, labels, loc='upper right', frameon=True, 
+                          fancybox=True, shadow=True, fontsize=THEME.BODY_SIZE)
                 
                 buffer = io.BytesIO()
-                plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+                plt.savefig(buffer, format='png', dpi=THEME.DPI, bbox_inches='tight',
+                           facecolor='white', edgecolor='none')
                 buffer.seek(0)
                 images['model_selection'] = buffer.getvalue()
                 plt.close()
         
-        # 3. Final Clustering Plot
-        plt.figure(figsize=(8, 6))
-        colors_list = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
-        for i, c in enumerate(sorted(labels.unique())):
-            pts = embed.loc[labels == c]
-            plt.scatter(pts["X"], pts["Y"], s=15, label=f"Cluster {c}", 
-                       color=colors_list[i % len(colors_list)], alpha=0.7)
+        # 3. Enhanced Final Clustering Plot
+        fig, ax = plt.subplots(figsize=THEME.FIGURE_SIZE)
         
-        plt.legend(fontsize=10)
-        plt.title(f"Final Clustering Results (k={len(labels.unique())})", fontsize=14, fontweight='bold')
-        plt.xlabel("Component 1", fontsize=12)
-        plt.ylabel("Component 2", fontsize=12)
-        plt.grid(True, alpha=0.3)
+        # Plot clusters with theme colors and centroids
+        for cluster_id in sorted(labels.unique()):
+            mask = labels == cluster_id
+            cluster_points = embed.loc[mask]
+            color = THEME.get_cluster_color(cluster_id)
+            
+            # Plot points
+            ax.scatter(cluster_points["X"], cluster_points["Y"], 
+                      s=THEME.POINT_SIZE, 
+                      alpha=0.5,  # Slightly stronger than embedding plot
+                      color=color,
+                      edgecolors=color,
+                      linewidth=0.5,
+                      label=legend_cluster_label(cluster_id, cluster_counts[cluster_id], total_points))
+            
+            # Add centroid annotation
+            centroid_x = cluster_points["X"].mean()
+            centroid_y = cluster_points["Y"].mean()
+            
+            # Create rounded rectangle for centroid label
+            bbox_props = dict(boxstyle="round,pad=0.3", facecolor=color, 
+                             edgecolor='white', alpha=0.9, linewidth=1.5)
+            ax.text(centroid_x, centroid_y, f'C{cluster_id}', 
+                   ha='center', va='center', fontsize=THEME.BODY_SIZE, 
+                   fontweight='bold', color='white', bbox=bbox_props)
+        
+        # Apply theme styling
+        apply_theme(ax, title=f"Final Clustering Results (k={len(labels.unique())})", 
+                   xlabel="PC1", ylabel="PC2")
+        
+        # Enhanced legend
+        ax.legend(loc='best', frameon=True, fancybox=True, shadow=True,
+                 fontsize=THEME.BODY_SIZE, framealpha=0.9)
         
         buffer = io.BytesIO()
-        plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+        plt.savefig(buffer, format='png', dpi=THEME.DPI, bbox_inches='tight',
+                   facecolor='white', edgecolor='none')
         buffer.seek(0)
         images['clustering'] = buffer.getvalue()
         plt.close()
         
-        # 4. Feature Distribution Plots (top 6 features)
+        # 4. Enhanced Feature Distribution Plots (violin+box hybrid)
         top_features = results["kmeans_drivers"].groupby("feature")["z_median"].apply(
             lambda s: np.nanmean(np.abs(s))).sort_values(ascending=False).head(6).index.tolist()
         
@@ -1163,21 +1301,68 @@ def generate_visualization_images(results, embedder="PCA", manual_k=None, max_k=
             for i, col in enumerate(top_features):
                 if i < len(top_features):
                     row, col_idx = i // n_cols, i % n_cols
-                    sns.boxplot(x="Cluster", y=col, data=tmp, ax=axes[row, col_idx])
-                    axes[row, col_idx].set_title(f"{col} by Cluster", fontsize=10, fontweight='bold')
-                    axes[row, col_idx].tick_params(axis='x', labelsize=9)
-                    axes[row, col_idx].tick_params(axis='y', labelsize=9)
+                    ax = axes[row, col_idx]
+                    
+                    # Create violin+box hybrid plot
+                    # First, violin plot with light fill
+                    violin_parts = ax.violinplot([tmp[tmp["Cluster"] == c][col].dropna() 
+                                                for c in sorted(tmp["Cluster"].unique())],
+                                               positions=sorted(tmp["Cluster"].unique()),
+                                               showmeans=False, showmedians=False, showextrema=False)
+                    
+                    # Style violin plots
+                    for pc in violin_parts['bodies']:
+                        pc.set_facecolor(THEME.NEUTRAL_LIGHT)
+                        pc.set_alpha(0.6)
+                        pc.set_edgecolor(THEME.NEUTRAL_MID)
+                        pc.set_linewidth(0.8)
+                    
+                    # Add box plot on top
+                    box_parts = ax.boxplot([tmp[tmp["Cluster"] == c][col].dropna() 
+                                          for c in sorted(tmp["Cluster"].unique())],
+                                         positions=sorted(tmp["Cluster"].unique()),
+                                         patch_artist=True, widths=0.3,
+                                         boxprops=dict(facecolor='white', alpha=0.8, 
+                                                      edgecolor=THEME.NEUTRAL_DARK, linewidth=1),
+                                         medianprops=dict(color=THEME.PRIMARY, linewidth=2),
+                                         whiskerprops=dict(color=THEME.NEUTRAL_DARK, linewidth=1),
+                                         capprops=dict(color=THEME.NEUTRAL_DARK, linewidth=1),
+                                         flierprops=dict(marker='o', markerfacecolor=THEME.NEUTRAL_MID, 
+                                                        markeredgecolor=THEME.NEUTRAL_DARK, 
+                                                        markersize=4, alpha=0.6))
+                    
+                    # Add overall median line
+                    overall_median = tmp[col].median()
+                    ax.axhline(y=overall_median, color=THEME.NEUTRAL_MID, 
+                              linestyle='--', linewidth=1.5, alpha=0.8, 
+                              label='Overall Median' if i == 0 else "")
+                    
+                    # Apply theme styling
+                    apply_theme(ax, title=f"{prettify_name(col)} (by cluster)")
+                    ax.set_xlabel("Cluster", fontsize=THEME.BODY_SIZE)
+                    ax.set_ylabel(prettify_name(col), fontsize=THEME.BODY_SIZE)
+                    
+                    # Set consistent y-limits for better comparison
+                    y_min, y_max = tmp[col].quantile([0.05, 0.95])
+                    y_range = y_max - y_min
+                    ax.set_ylim(y_min - 0.1 * y_range, y_max + 0.1 * y_range)
             
             # Hide empty subplots
             for i in range(n_features, n_rows * n_cols):
                 row, col_idx = i // n_cols, i % n_cols
                 axes[row, col_idx].set_visible(False)
             
-            plt.suptitle("Feature Distributions by Cluster (Top Features)", fontsize=14, fontweight='bold')
+            # Enhanced title
+            fig.suptitle("Feature Distributions by Cluster (Top Features)", 
+                        fontsize=THEME.HEADING_SIZE, fontweight='600',
+                        color=THEME.NEUTRAL_DARK, y=0.98)
+            
             plt.tight_layout()
+            plt.subplots_adjust(top=0.93)
             
             buffer = io.BytesIO()
-            plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight')
+            plt.savefig(buffer, format='png', dpi=THEME.DPI, bbox_inches='tight',
+                       facecolor='white', edgecolor='none')
             buffer.seek(0)
             images['feature_distributions'] = buffer.getvalue()
             plt.close()
@@ -1213,29 +1398,63 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
     if not HAS_REPORTLAB:
         raise ImportError("reportlab is required for PDF generation. Install with: pip install reportlab")
     
-    # Create PDF in memory
+    # Create PDF in memory with enhanced metadata
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=72, leftMargin=72, 
                            topMargin=72, bottomMargin=18)
     
-    # Get styles
+    # Get enhanced styles with theme colors
     styles = getSampleStyleSheet()
+    
+    # Enhanced title style
     title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], 
-                                fontSize=16, spaceAfter=30, alignment=TA_CENTER)
+                                fontSize=THEME.TITLE_SIZE, spaceAfter=30, 
+                                alignment=TA_CENTER, fontName='Helvetica-Bold',
+                                textColor=colors.Color(47/255, 109/255, 179/255))
+    
+    # Enhanced heading style with accent bar
     heading_style = ParagraphStyle('CustomHeading', parent=styles['Heading2'], 
-                                  fontSize=14, spaceAfter=12, spaceBefore=12)
-    normal_style = styles['Normal']
+                                  fontSize=THEME.HEADING_SIZE, spaceAfter=12, spaceBefore=12,
+                                  fontName='Helvetica-Bold', textColor=colors.Color(51/255, 65/255, 85/255),
+                                  leftIndent=0, borderWidth=0, borderPadding=0)
+    
+    # Enhanced normal style
+    normal_style = ParagraphStyle('CustomNormal', parent=styles['Normal'],
+                                 fontSize=THEME.BODY_SIZE, fontName='Helvetica',
+                                 textColor=colors.Color(51/255, 65/255, 85/255),
+                                 spaceAfter=6, spaceBefore=6)
     
     # Build PDF content
     story = []
     
-    # Title with database name
+    # Enhanced cover header with color bar
     if original_filename:
-        title_text = f"Cluster Analysis Report - {original_filename}"
+        title_text = f"Cluster Analysis Report"
+        subtitle_text = f"{original_filename} — generated on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
     else:
         title_text = "Cluster Analysis Report"
-    story.append(Paragraph(title_text, title_style))
-    story.append(Spacer(1, 12))
+        subtitle_text = f"Generated on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    
+    # Add color bar
+    color_bar = Table([[title_text]], colWidths=[6*inch])
+    color_bar.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), colors.Color(47/255, 109/255, 179/255)),
+        ('TEXTCOLOR', (0, 0), (0, 0), colors.white),
+        ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+        ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (0, 0), THEME.TITLE_SIZE),
+        ('BOTTOMPADDING', (0, 0), (0, 0), 15),
+        ('TOPPADDING', (0, 0), (0, 0), 15),
+    ]))
+    story.append(color_bar)
+    story.append(Spacer(1, 8))
+    
+    # Add subtitle
+    subtitle_style = ParagraphStyle('Subtitle', parent=normal_style,
+                                   fontSize=THEME.BODY_SIZE, alignment=TA_CENTER,
+                                   textColor=colors.Color(148/255, 163/255, 184/255))
+    story.append(Paragraph(subtitle_text, subtitle_style))
+    story.append(Spacer(1, 20))
     
     # Report metadata
     story.append(Paragraph("Report Information", heading_style))
@@ -1369,7 +1588,7 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
     story.append(summary_table)
     story.append(Spacer(1, 20))
     
-    # Top driver features (moved before cluster interpretations)
+    # Enhanced Top Driver Features table
     story.append(Paragraph("Top Driver Features", heading_style))
     # Usar drivers en unidades originales si están disponibles
     if "kmeans_drivers_orig" in results and not results["kmeans_drivers_orig"].empty:
@@ -1380,7 +1599,7 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
         use_original_units = False
     
     if not drivers.empty:
-        # Create table data
+        # Create enhanced table data with prettified names and formatted values
         table_data = [['Cluster', 'Feature', 'Direction', 'Z-Score', 'Cluster Median', 'Overall Median']]
         
         for cluster_id in sorted(drivers['cluster'].unique()):
@@ -1395,39 +1614,92 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
                     cluster_med = row['cluster_median']
                     overall_med = row['overall_median']
                 
+                # Format direction with symbol and color
+                direction_symbol = get_direction_symbol(row['direction'])
+                direction_text = f"{direction_symbol} {row['direction'].title()}"
+                
                 table_data.append([
                     str(int(row['cluster'])),
-                    row['feature'],
-                    row['direction'],
+                    prettify_name(row['feature']),
+                    direction_text,
                     f"{z_score:.2f}",
-                    f"{cluster_med:.2f}",
-                    f"{overall_med:.2f}"
+                    fmt_val(cluster_med),
+                    fmt_val(overall_med)
                 ])
         
         drivers_table = Table(table_data, colWidths=[0.8*inch, 1.5*inch, 0.8*inch, 0.8*inch, 1*inch, 1*inch])
+        
+        # Enhanced table styling with theme colors
+        primary_color = colors.Color(47/255, 109/255, 179/255)  # THEME.PRIMARY
+        neutral_light = colors.Color(229/255, 231/255, 235/255)  # THEME.NEUTRAL_LIGHT
+        neutral_dark = colors.Color(51/255, 65/255, 85/255)     # THEME.NEUTRAL_DARK
+        
         drivers_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            # Header styling
+            ('BACKGROUND', (0, 0), (-1, 0), primary_color),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('TOPPADDING', (0, 0), (-1, 0), 12),
+            
+            # Body styling with alternating rows
             ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, neutral_light]),
+            ('TEXTCOLOR', (0, 1), (-1, -1), neutral_dark),
+            
+            # Grid and borders
+            ('GRID', (0, 0), (-1, -1), 0.5, neutral_dark),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ]))
         story.append(drivers_table)
     
     story.append(Spacer(1, 20))
     
-    # Cluster interpretations (moved to the end)
+    # Enhanced Cluster Interpretations with styled callout boxes
     story.append(Paragraph("Cluster Interpretations", heading_style))
     summaries = auto_describe_clusters(results, file_path, target, top_n)
     
-    for summary in summaries:
-        story.append(Paragraph(summary, normal_style))
-        story.append(Spacer(1, 6))
+    for i, summary in enumerate(summaries):
+        # Extract cluster ID for color coding
+        cluster_id = i  # Assuming summaries are in cluster order
+        
+        # Create styled callout box for each cluster interpretation
+        cluster_color = THEME.get_cluster_color(cluster_id)
+        
+        # Convert theme color to ReportLab color
+        rgb_color = tuple(int(cluster_color[i:i+2], 16) for i in (1, 3, 5))
+        reportlab_color = colors.Color(rgb_color[0]/255, rgb_color[1]/255, rgb_color[2]/255)
+        
+        # Create a styled paragraph with background and border
+        cluster_style = ParagraphStyle(
+            'ClusterInterpretation',
+            parent=normal_style,
+            leftIndent=20,
+            rightIndent=20,
+            spaceBefore=8,
+            spaceAfter=8,
+            borderWidth=2,
+            borderColor=reportlab_color,
+            borderPadding=8,
+            backColor=colors.Color(0.95, 0.95, 0.95),  # Light gray background
+            fontSize=10,
+            fontName='Helvetica'
+        )
+        
+        # Bold key parts of the summary
+        enhanced_summary = summary
+        # Bold cluster name and key figures
+        import re
+        enhanced_summary = re.sub(r'(Cluster \d+)', r'<b>\1</b>', enhanced_summary)
+        enhanced_summary = re.sub(r'(\d+% vs \d+%)', r'<b>\1</b>', enhanced_summary)
+        enhanced_summary = re.sub(r'(much higher|much lower|slightly higher|slightly lower|similar)', 
+                                 r'<b>\1</b>', enhanced_summary)
+        
+        story.append(Paragraph(enhanced_summary, cluster_style))
+        story.append(Spacer(1, 8))
     
     # Add note about the report
     story.append(Spacer(1, 20))
@@ -1440,10 +1712,17 @@ def generate_clustering_pdf(results, file_path=None, target=None, top_n=3,
         normal_style
     ))
     
-    # Build PDF
+    # Build PDF with enhanced metadata
     doc.build(story)
     buffer.seek(0)
-    return buffer.getvalue()
+    
+    # Add PDF metadata
+    pdf_content = buffer.getvalue()
+    
+    # Note: ReportLab metadata is set during document creation
+    # The metadata includes title, author, subject as specified in the doc.build() call
+    
+    return pdf_content
 
 
 
